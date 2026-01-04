@@ -6,129 +6,188 @@ import PersonIcon from '@mui/icons-material/Person';
 import BusinessIcon from '@mui/icons-material/Business';
 import { theme } from './theme';
 import { UserAttributesProvider } from './contexts/UserAttributesContext';
-import { signInWithRedirect, signOut as amplifySignOut, getCurrentUser } from 'aws-amplify/auth';
-import { Hub } from 'aws-amplify/utils';
+import {
+  signInWithRedirect,
+  signOut,
+  getCurrentUser,
+  exchangeCodeForTokens,
+  CognitoUser
+} from './utils/cognitoAuth';
 import { useExternalAuth } from './hooks/useExternalAuth';
-
-// Note: Amplify.configure is called in index.tsx to avoid duplicate configuration
 
 function App() {
   // EW-AIからの認証トークンを処理
   useExternalAuth();
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<CognitoUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [showTerms, setShowTerms] = useState(false);
-  const [hasAgreed, setHasAgreed] = useState(false); // 常にfalseで初期化
+  const [hasAgreed, setHasAgreed] = useState(false);
+  const [isRedirecting, setIsRedirecting] = useState(false);
 
   // ユーザー認証状態を確認
   useEffect(() => {
-    // URLに認証コードがある場合は、認証完了を待つ
     const urlParams = new URLSearchParams(window.location.search);
     const hasAuthCode = urlParams.get('code');
     const hasError = urlParams.get('error');
-    
+    const loginMode = urlParams.get('login');
+
     console.log('🔍 URL確認:', window.location.href);
     console.log('🔍 認証コード:', hasAuthCode ? '検出' : 'なし');
     console.log('🔍 エラー:', hasError || 'なし');
+    console.log('🔍 ログインモード:', loginMode || 'なし');
+
     if (hasError) {
-      console.log('❌ エラー詳細:', urlParams.get('error_description'));
-    }
-    
-    if (hasAuthCode) {
-      console.log('🎉 認証コードを検出！認証処理を待機します...');
-      setLoading(true);
-      
-      // 認証完了を待つ（最大30秒間、1秒ごとにリトライ）
-      let attempts = 0;
-      const maxAttempts = 30;
-      
-      const waitForAuth = setInterval(async () => {
-        attempts++;
-        console.log(`🔄 認証完了を確認中... (${attempts}/${maxAttempts})`);
-        
-        try {
-          const currentUser = await getCurrentUser();
-          console.log('✅ ユーザー認証成功:', currentUser.username);
-          setUser(currentUser);
-          setLoading(false);
-          clearInterval(waitForAuth);
-          // URLをクリーンアップ
-          window.history.replaceState({}, document.title, window.location.pathname);
-        } catch (error) {
-          if (attempts >= maxAttempts) {
-            console.error('❌ 認証タイムアウト');
-            setLoading(false);
-            clearInterval(waitForAuth);
-          }
-        }
-      }, 1000);
-      
-      return () => clearInterval(waitForAuth);
-    } else {
-      // 通常の初期チェック
-      checkUser();
-    }
-    
-    // Amplify Hubで認証イベントを監視
-    const hubListener = Hub.listen('auth', async (data) => {
-      console.log('🔔 Auth event:', data.payload.event);
-      
-      switch (data.payload.event) {
-        case 'signInWithRedirect':
-          console.log('🎉 リダイレクトからのサインインを検出');
-          setLoading(true);
-          setTimeout(() => checkUser(), 2000);
-          break;
-        case 'signInWithRedirect_failure':
-          console.error('❌ サインイン失敗:', data.payload.data);
-          setLoading(false);
-          break;
-        case 'tokenRefresh':
-          console.log('🔄 トークンをリフレッシュしました');
-          await checkUser();
-          break;
-        case 'customOAuthState':
-          console.log('📝 OAuth state:', data.payload.data);
-          setTimeout(() => checkUser(), 1000);
-          break;
-        default:
-          console.log('📬 その他のイベント:', data.payload.event);
+      const errorDescription = urlParams.get('error_description');
+      const error = urlParams.get('error');
+      console.error('❌ Cognito認証エラー:', {
+        error,
+        errorDescription,
+        state: urlParams.get('state')
+      });
+
+      if (error === 'invalid_scope' || errorDescription === 'invalid_scope') {
+        console.error('⚠️ invalid_scopeエラー: CognitoのApp Client設定を確認してください');
+        console.error('   1. AWS CognitoコンソールでApp Clientを開く');
+        console.error('   2. "Allowed OAuth scopes"で以下が有効になっているか確認:');
+        console.error('      - email');
+        console.error('      - openid');
+        console.error('      - profile');
+        console.error('   3. "Allowed callback URLs"に以下が登録されているか確認:');
+        console.error(`      - ${process.env.REACT_APP_CALLBACK_URL || 'http://localhost:3000'}`);
       }
-    });
-    
-    return () => {
-      hubListener();
-    };
-  }, []);
+
+      if (error === 'invalid_request' || errorDescription === 'invalid_request') {
+        console.error('⚠️ invalid_requestエラー: CognitoのApp Client設定を確認してください');
+        console.error('   1. AWS CognitoコンソールでApp Clientを開く');
+        console.error('   2. "Allowed callback URLs"に以下が登録されているか確認:');
+        console.error(`      - ${process.env.REACT_APP_CALLBACK_URL || 'http://localhost:3000'}`);
+        console.error('   3. URLの末尾スラッシュが設定と一致しているか確認');
+      }
+
+      setLoading(false);
+      setUser(null);
+      setIsRedirecting(false);
+      sessionStorage.removeItem('cognito_redirecting');
+      return;
+    }
+
+    // ?login=email パラメータがある場合は、リダイレクトフラグを無視して即座にリダイレクト
+    if (loginMode === 'email' && !hasAuthCode) {
+      console.log('📧 メール認証モード: 即座にリダイレクトします');
+      sessionStorage.removeItem('cognito_redirecting');
+      setIsRedirecting(true);
+      sessionStorage.setItem('cognito_redirecting', 'true');
+
+      try {
+        signInWithRedirect(); // プロバイダー指定なし = Hosted UIで選択可能
+        console.log('✅ リダイレクト開始');
+      } catch (error) {
+        console.error('❌ リダイレクトエラー:', error);
+        setIsRedirecting(false);
+        sessionStorage.removeItem('cognito_redirecting');
+        setLoading(false);
+      }
+      return;
+    }
+
+    // リダイレクト中フラグをチェック（無限ループ防止）
+    const redirectingFlag = sessionStorage.getItem('cognito_redirecting');
+    if (redirectingFlag === 'true' && !hasAuthCode) {
+      console.log('⏳ リダイレクト処理中...待機します');
+      const checkRedirect = setInterval(() => {
+        const stillRedirecting = sessionStorage.getItem('cognito_redirecting');
+        if (stillRedirecting !== 'true') {
+          clearInterval(checkRedirect);
+          checkUser();
+        }
+      }, 500);
+
+      setTimeout(() => {
+        clearInterval(checkRedirect);
+        sessionStorage.removeItem('cognito_redirecting');
+        checkUser();
+      }, 10000);
+
+      return () => clearInterval(checkRedirect);
+    }
+
+    if (hasAuthCode) {
+      console.log('🎉 認証コードを検出！トークンに交換します...');
+      sessionStorage.removeItem('cognito_redirecting');
+      setLoading(true);
+
+      exchangeCodeForTokens(hasAuthCode)
+        .then(async () => {
+          console.log('✅ トークン交換成功');
+          await new Promise(resolve => setTimeout(resolve, 500));
+          try {
+            const currentUser = await getCurrentUser();
+            console.log('✅ ユーザー認証成功:', currentUser.username);
+            setUser(currentUser);
+            setLoading(false);
+            window.history.replaceState({}, document.title, window.location.pathname);
+          } catch (error) {
+            console.error('❌ ユーザー情報取得エラー:', error);
+            setLoading(false);
+            setUser(null);
+          }
+        })
+        .catch((error) => {
+          console.error('❌ トークン交換エラー:', error);
+          setLoading(false);
+          setUser(null);
+        });
+      return;
+    } else {
+      setTimeout(() => {
+        checkUser();
+      }, 500);
+    }
+  }, [isRedirecting]);
 
   async function checkUser() {
+    if (isRedirecting) {
+      console.log('⏸️ リダイレクト処理中のため、スキップします');
+      return;
+    }
+
     try {
       console.log('👤 ユーザー情報を取得中...');
       const currentUser = await getCurrentUser();
       console.log('✅ ユーザーが見つかりました:', currentUser.username);
       setUser(currentUser);
       setLoading(false);
+      setIsRedirecting(false);
+      sessionStorage.removeItem('cognito_redirecting');
     } catch (error) {
       console.log('❌ ログインしていません');
       setUser(null);
-      setLoading(false);
-      
-      // URLパラメータをチェック（バックドア用）
+
+      const redirectingFlag = sessionStorage.getItem('cognito_redirecting');
+      if (redirectingFlag === 'true') {
+        console.log('⏸️ リダイレクト処理中のため、スキップします');
+        return;
+      }
+
       const urlParams = new URLSearchParams(window.location.search);
       const loginMode = urlParams.get('login');
-      
+
       try {
+        setIsRedirecting(true);
+        sessionStorage.setItem('cognito_redirecting', 'true');
+
         if (loginMode === 'email') {
-          // ?login=email の場合: メール/パスワード認証（バックドア）
           console.log('📧 メール認証モードでリダイレクト');
-          await signInWithRedirect(); // プロバイダー指定なし = Hosted UIで選択可能
+          signInWithRedirect();
         } else {
-          // 通常: PA認証のみ
           console.log('🔐 PA認証にリダイレクト');
-          await signInWithRedirect({ provider: { custom: 'PA認証' } });
+          signInWithRedirect('PA認証');
         }
       } catch (redirectError) {
         console.error('❌ リダイレクトエラー:', redirectError);
+        setIsRedirecting(false);
+        sessionStorage.removeItem('cognito_redirecting');
+        setLoading(false);
       }
     }
   }
@@ -143,7 +202,7 @@ function App() {
       setHasAgreed(true);
       return;
     }
-    
+
     if (user && !hasAgreed) {
       // ユーザーが存在し、まだ同意していない場合は利用規約を表示
       setShowTerms(true);
@@ -161,7 +220,7 @@ function App() {
   const handleClose = async () => {
     try {
       setShowTerms(false);
-      await amplifySignOut({ global: false });
+      await signOut(); // Cognito Hosted UIにリダイレクト
       setUser(null);
       window.location.reload();
     } catch (error) {

@@ -1,10 +1,10 @@
 import axios from "axios";
 
-// 開発環境ではプロキシ経由、本番環境では直接接続
+// 開発環境では直接API Gatewayに接続（プロキシ経由だとHTTPヘッダーサイズ制限に引っかかる可能性があるため）
+// 本番環境でも直接接続
 const isDevelopment = process.env.NODE_ENV === 'development';
-const baseURL = isDevelopment 
-  ? '/Prod/'  // プロキシ経由（package.jsonのproxyを使用）
-  : process.env.REACT_APP_AWS_API_BASE_ENDPOINT;
+const baseURL = process.env.REACT_APP_AWS_API_BASE_ENDPOINT || 
+  (isDevelopment ? 'https://pq1c6g2zzi.execute-api.ap-northeast-1.amazonaws.com/Prod/' : '');
 const apiKey = process.env.REACT_APP_AWS_API_KEY;
 
 console.log('Axios Configuration:', {
@@ -25,12 +25,107 @@ const axiosInstance = axios.create({
 // エラー詳細をログ出力
 axiosInstance.interceptors.request.use(
   (config) => {
+    // 不要なヘッダーを削除（HTTPヘッダーサイズ制限対策）
+    // axiosが自動的に追加する不要なヘッダーを削除
+    if (config.headers) {
+      // 共通ヘッダーオブジェクトを削除
+      delete (config.headers as any).common;
+      delete (config.headers as any).delete;
+      delete (config.headers as any).get;
+      delete (config.headers as any).head;
+      delete (config.headers as any).post;
+      delete (config.headers as any).put;
+      delete (config.headers as any).patch;
+      
+      // 必要最小限のヘッダーのみ保持
+      const cleanHeaders: Record<string, string> = {
+        'Content-Type': typeof config.headers['Content-Type'] === 'string' 
+          ? config.headers['Content-Type'] 
+          : 'application/json',
+      };
+      
+      if (apiKey) {
+        cleanHeaders['x-api-key'] = apiKey;
+      }
+      
+      // 既存のカスタムヘッダーがあれば保持
+      const existingApiKey = config.headers['x-api-key'];
+      if (existingApiKey && typeof existingApiKey === 'string') {
+        cleanHeaders['x-api-key'] = existingApiKey;
+      }
+      
+      config.headers = cleanHeaders as any;
+    }
+    
+    // リクエストボディのサイズをチェック
+    let requestSize = 0;
+    if (config.data) {
+      const dataString = typeof config.data === 'string' ? config.data : JSON.stringify(config.data);
+      requestSize = new Blob([dataString]).size;
+    }
+    
+    // HTTPヘッダーのサイズをチェック（実際のHTTPリクエストヘッダーをシミュレート）
+    let headerSize = 0;
+    const headerLines: string[] = [];
+    Object.keys(config.headers || {}).forEach((key) => {
+      const value = config.headers?.[key];
+      if (value && typeof value === 'string') {
+        const headerLine = `${key}: ${value}`;
+        headerLines.push(headerLine);
+        headerSize += new Blob([headerLine]).size + 2; // +2 for CRLF
+      }
+    });
+    // Request line
+    headerSize += new Blob([`POST ${config.url} HTTP/1.1`]).size + 2;
+    
+    // 個別のヘッダーサイズをチェック
+    const headerSizes: Record<string, number> = {};
+    Object.keys(config.headers || {}).forEach((key) => {
+      const value = config.headers?.[key];
+      if (value && typeof value === 'string') {
+        headerSizes[key] = new Blob([String(value)]).size;
+      }
+    });
+    
     console.log('API Request:', {
       url: config.url,
       method: config.method,
       fullURL: isDevelopment ? `http://localhost:3000${config.baseURL}${config.url}` : `${config.baseURL}${config.url}`,
-      headers: config.headers,
+      requestSize: requestSize,
+      requestSizeKB: (requestSize / 1024).toFixed(2),
+      requestSizeMB: (requestSize / (1024 * 1024)).toFixed(2),
+      headerSize: headerSize,
+      headerSizeKB: (headerSize / 1024).toFixed(2),
+      headerSizes: headerSizes,
+      headerKeys: Object.keys(config.headers || {}),
     });
+    
+    // HTTPヘッダーサイズが大きい場合は警告（10KB制限）
+    const MAX_HEADER_SIZE = 10 * 1024; // 10KB
+    if (headerSize > MAX_HEADER_SIZE) {
+      console.error('❌ HTTP header is too large:', {
+        size: headerSize,
+        sizeKB: (headerSize / 1024).toFixed(2),
+        maxSizeKB: (MAX_HEADER_SIZE / 1024).toFixed(2),
+        headerSizes: headerSizes,
+        headerKeys: Object.keys(config.headers || {}),
+      });
+    } else if (headerSize > MAX_HEADER_SIZE * 0.8) {
+      console.warn('⚠️ HTTP header is getting large:', {
+        size: headerSize,
+        sizeKB: (headerSize / 1024).toFixed(2),
+        headerSizes: headerSizes,
+      });
+    }
+    
+    // リクエストサイズが大きい場合は警告
+    if (requestSize > 6 * 1024 * 1024) { // 6MB
+      console.warn('⚠️ Large request detected:', {
+        sizeMB: (requestSize / (1024 * 1024)).toFixed(2),
+        url: config.url,
+      });
+    }
+    
     return config;
   }
 );

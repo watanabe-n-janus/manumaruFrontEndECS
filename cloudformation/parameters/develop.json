@@ -1,0 +1,10 @@
+[
+  {
+    "ParameterKey": "Environment",
+    "ParameterValue": "develop"
+  },
+  {
+    "ParameterKey": "AllowedOrigins",
+    "ParameterValue": "http://localhost:3000,http://localhost:5173"
+  }
+]

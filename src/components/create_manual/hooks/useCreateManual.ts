@@ -85,15 +85,61 @@ export const useCreateManual = (
             reencodeVideo: reencodeVideo === true,
             ...(customPromptEnabled && customPrompt && { customPrompt: customPrompt })
         };
+        
+        // リクエストサイズをチェック
+        const postDataString = JSON.stringify(postData);
+        const postDataSize = new Blob([postDataString]).size;
+        const postDataSizeKB = (postDataSize / 1024).toFixed(2);
+        const postDataSizeMB = (postDataSize / (1024 * 1024)).toFixed(2);
+        
+        console.log('📊 Request size check:', {
+            size: postDataSize,
+            sizeKB: postDataSizeKB,
+            sizeMB: postDataSizeMB,
+            workContentLength: workContent?.length || 0,
+            customPromptLength: customPrompt?.length || 0,
+        });
+        
+        // API Gatewayの制限（10MB）をチェック
+        const MAX_PAYLOAD_SIZE = 10 * 1024 * 1024; // 10MB
+        if (postDataSize > MAX_PAYLOAD_SIZE) {
+            const errorMessage = `リクエストサイズが大きすぎます（${postDataSizeMB}MB）。10MB以下にしてください。`;
+            console.error('❌ Request too large:', errorMessage);
+            showSnackbar(errorMessage, 'error');
+            setLoading(false);
+            return;
+        }
+        
+        // 6MBを超える場合は警告
+        const WARNING_SIZE = 6 * 1024 * 1024; // 6MB
+        if (postDataSize > WARNING_SIZE) {
+            console.warn('⚠️ Request size is large:', `${postDataSizeMB}MB`);
+        }
+        
         try {
             const response = await axiosInstance.post(
                 "sf-gemini-manual-function",
                 postData
             );
             setExecutionArn(response.data?.executionArn);
-        } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
-            showSnackbar(`API実行に失敗しました: ${message}`, 'error');
+        } catch (error: any) {
+            console.error('❌ API Error details:', {
+                status: error.response?.status,
+                statusText: error.response?.statusText,
+                data: error.response?.data,
+                message: error.message,
+            });
+            
+            let errorMessage = 'API実行に失敗しました';
+            if (error.response?.status === 413) {
+                errorMessage = `リクエストサイズが大きすぎます（${postDataSizeMB}MB）。workContentやcustomPromptの内容を短くしてください。`;
+            } else if (error.response?.data?.message) {
+                errorMessage = `API実行に失敗しました: ${error.response.data.message}`;
+            } else if (error.message) {
+                errorMessage = `API実行に失敗しました: ${error.message}`;
+            }
+            
+            showSnackbar(errorMessage, 'error');
             setLoading(false);
         }
     };
