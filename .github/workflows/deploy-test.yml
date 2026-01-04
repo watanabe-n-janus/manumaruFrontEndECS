@@ -1,10 +1,11 @@
-name: Deploy to Test Environment
+name: Deploy to Develop Environment
 
 on:
   push:
     branches:
       - test
       - test-clean
+      - develop
   workflow_dispatch:
 
 env:
@@ -34,14 +35,24 @@ jobs:
           REACT_APP_USER_POOL_ID: ${{ secrets.REACT_APP_USER_POOL_ID }}
           REACT_APP_USER_POOL_CLIENT_ID: ${{ secrets.REACT_APP_USER_POOL_CLIENT_ID }}
           REACT_APP_COGNITO_DOMAIN: ${{ secrets.REACT_APP_COGNITO_DOMAIN }}
-          REACT_APP_AWS_REGION: ${{ secrets.REACT_APP_AWS_REGION }}
+          REACT_APP_AWS_REGION: ${{ secrets.REACT_APP_AWS_REGION || 'ap-northeast-1' }}
           REACT_APP_CALLBACK_URL: ${{ secrets.REACT_APP_CALLBACK_URL }}
           REACT_APP_SIGNOUT_URL: ${{ secrets.REACT_APP_SIGNOUT_URL }}
           REACT_APP_AWS_API_BASE_ENDPOINT: ${{ secrets.REACT_APP_AWS_API_BASE_ENDPOINT }}
           REACT_APP_AWS_API_KEY: ${{ secrets.REACT_APP_AWS_API_KEY }}
           REACT_APP_AWS_BUCKET_NAME: ${{ secrets.REACT_APP_AWS_BUCKET_NAME }}
           REACT_APP_DYNAMODB_TABLE_NAME: ${{ secrets.REACT_APP_DYNAMODB_TABLE_NAME }}
-        run: npm run build
+        run: |
+          echo "Building React app with environment variables..."
+          npm run build
+          
+          if [ ! -d "build" ]; then
+            echo "❌ Error: Build directory not found"
+            exit 1
+          fi
+          
+          echo "✓ Build completed successfully"
+          echo "Build size: $(du -sh build | cut -f1)"
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -52,9 +63,58 @@ jobs:
 
       - name: Deploy CloudFormation stack
         run: |
-          chmod +x cloudformation/scripts/deploy.sh
           cd cloudformation
-          ./scripts/deploy.sh develop
+          
+          # CloudFormationテンプレートの検証
+          echo "Validating CloudFormation template..."
+          aws cloudformation validate-template \
+            --template-body file://templates/main.yaml \
+            > /dev/null
+          
+          if [ $? -ne 0 ]; then
+            echo "❌ Template validation failed"
+            exit 1
+          fi
+          echo "✓ Template validation successful"
+          
+          # スタックの存在確認とデプロイ
+          STACK_NAME="manumaruFrontECS-develop"
+          PARAMETER_FILE="parameters/develop.json"
+          
+          if aws cloudformation describe-stacks --stack-name "$STACK_NAME" > /dev/null 2>&1; then
+            echo "Stack exists, updating..."
+            aws cloudformation update-stack \
+              --stack-name "$STACK_NAME" \
+              --template-body file://templates/main.yaml \
+              --parameters file://$PARAMETER_FILE \
+              --capabilities CAPABILITY_NAMED_IAM || {
+                # 更新が不要な場合（No updates are to be performed）は正常終了
+                if aws cloudformation describe-stack-events \
+                  --stack-name "$STACK_NAME" \
+                  --max-items 1 \
+                  --query 'StackEvents[0].ResourceStatus' \
+                  --output text | grep -q "UPDATE_COMPLETE\|CREATE_COMPLETE"; then
+                  echo "✓ Stack is up to date"
+                else
+                  exit 1
+                fi
+              }
+            
+            echo "Waiting for stack update to complete..."
+            aws cloudformation wait stack-update-complete --stack-name "$STACK_NAME" || true
+          else
+            echo "Stack does not exist, creating..."
+            aws cloudformation create-stack \
+              --stack-name "$STACK_NAME" \
+              --template-body file://templates/main.yaml \
+              --parameters file://$PARAMETER_FILE \
+              --capabilities CAPABILITY_NAMED_IAM
+            
+            echo "Waiting for stack creation to complete..."
+            aws cloudformation wait stack-create-complete --stack-name "$STACK_NAME"
+          fi
+          
+          echo "✓ CloudFormation stack deployment completed"
 
       - name: Get S3 bucket name from CloudFormation
         id: get-s3-bucket
@@ -72,20 +132,35 @@ jobs:
 
       - name: Sync build files to S3
         run: |
-          aws s3 sync build/ s3://${{ steps.get-s3-bucket.outputs.bucket }}/ \
+          BUCKET_NAME="${{ steps.get-s3-bucket.outputs.bucket }}"
+          
+          echo "Syncing build files to S3 bucket: $BUCKET_NAME"
+          
+          # Static assets with long cache
+          aws s3 sync build/ s3://$BUCKET_NAME/ \
             --delete \
             --cache-control "public, max-age=31536000, immutable" \
             --exclude "*.html" \
             --exclude "service-worker.js" \
-            --exclude "manifest.json"
+            --exclude "manifest.json" \
+            --exclude "*.map"
           
           # HTML files and service worker should not be cached
-          aws s3 sync build/ s3://${{ steps.get-s3-bucket.outputs.bucket }}/ \
+          aws s3 sync build/ s3://$BUCKET_NAME/ \
             --delete \
             --cache-control "public, max-age=0, must-revalidate" \
             --include "*.html" \
             --include "service-worker.js" \
             --include "manifest.json"
+          
+          # Source maps (optional, for debugging)
+          if find build -name "*.map" | grep -q .; then
+            aws s3 sync build/ s3://$BUCKET_NAME/ \
+              --cache-control "public, max-age=0, no-cache" \
+              --include "*.map"
+          fi
+          
+          echo "✓ Files synced to S3 successfully"
 
       - name: Invalidate CloudFront cache
         run: |

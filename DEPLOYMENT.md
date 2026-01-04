@@ -80,16 +80,21 @@ CloudFormationデプロイ後：
 
 ## デプロイ方法
 
-### testブランチにデプロイ
+### develop/testブランチにデプロイ
 
 ```bash
-git checkout test
+git checkout develop  # または test, test-clean
 git add .
 git commit -m "Your commit message"
-git push origin test
+git push origin develop
 ```
 
 GitHub Actionsが自動的に実行され、`develop`環境にデプロイされます。
+
+**対応ブランチ**:
+- `develop`
+- `test`
+- `test-clean`
 
 ### production環境にデプロイ
 
