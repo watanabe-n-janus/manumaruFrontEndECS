@@ -1,0 +1,21 @@
+/* VideoPreview.css */
+.video-container {
+    width: 80%; /* コンテナの幅を調整 (例: 80%) */
+    margin: 0 auto; /* 中央寄せ */
+    max-width: 800px; /* 最大幅を設定 (任意) */
+  }
+  
+  .video-container video {
+    width: 100%; /* video要素をコンテナいっぱいに広げる */
+    height: auto; /* 高さを自動調整 */
+  }
+  
+  /* 必要であれば、タイトルやローディングメッセージのスタイルも追加 */
+  .video-container h3 {
+    text-align: center;
+    margin-bottom: 10px;
+  }
+  
+  .video-container p {
+      text-align: center;
+  }

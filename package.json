@@ -1,0 +1,86 @@
+{
+  "name": "amplify-gemini-demo",
+  "version": "0.1.0",
+  "private": true,
+  "proxy": "https://pq1c6g2zzi.execute-api.ap-northeast-1.amazonaws.com",
+  "dependencies": {
+    "@aws-amplify/auth": "^6.13.0",
+    "@aws-amplify/ui-react": "^6.11.2",
+    "@aws-sdk/client-dynamodb": "^3.943.0",
+    "@aws-sdk/client-s3": "^3.943.0",
+    "@aws-sdk/lib-dynamodb": "^3.943.0",
+    "@aws-sdk/lib-storage": "^3.943.0",
+    "@aws-sdk/s3-request-presigner": "^3.943.0",
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.0",
+    "@mui/icons-material": "^6.5.0",
+    "@mui/material": "^6.5.0",
+    "@mui/styles": "^6.5.0",
+    "@pdf-lib/fontkit": "^1.1.1",
+    "aws-amplify": "^6.15.0",
+    "axios": "^1.7.9",
+    "cra-template-typescript": "1.3.0",
+    "customize-cra": "^1.0.0",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^3.0.4",
+    "markerjs2": "^2.32.3",
+    "pdf-lib": "^1.17.1",
+    "pdfmake": "^0.2.18",
+    "react": "^18.3.1",
+    "react-app-rewired": "^2.2.1",
+    "react-dom": "^18.3.1",
+    "react-markdown": "^9.1.0",
+    "react-scripts": "^5.0.1",
+    "typescript": "^5.9.3",
+    "web-vitals": "^4.2.4"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject",
+    "postinstall": "patch-package"
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "devDependencies": {
+    "@babel/plugin-proposal-nullish-coalescing-operator": "^7.18.6",
+    "@babel/plugin-proposal-optional-chaining": "^7.21.0",
+    "@babel/plugin-proposal-private-property-in-object": "^7.21.11",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.2.0",
+    "@types/jest": "^29.5.14",
+    "@types/react": "^18.3.27",
+    "@types/react-dom": "^18.3.7",
+    "@types/testing-library__react": "^10.2.0",
+    "patch-package": "^8.0.1",
+    "postinstall-postinstall": "^2.1.0"
+  },
+  "overrides": {
+    "node-forge": "^1.3.2",
+    "nth-check": "^2.1.1",
+    "postcss": "^8.4.31",
+    "serialize-javascript": "^6.0.2",
+    "dompurify": "^3.2.4",
+    "mdast-util-to-hast": "^13.2.1",
+    "webpack-dev-server": "^5.2.1",
+    "glob": "^10.3.10",
+    "inflight": "npm:inflight-remove@1.0.4"
+  }
+}
