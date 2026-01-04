@@ -86,26 +86,40 @@ jobs:
           AWS_SECRET_ACCESS_KEY="${{ secrets.AWS_SECRET_ACCESS_KEY }}"
           AWS_REGION="${{ secrets.AWS_REGION || env.AWS_REGION }}"
           
+          # 前後の空白を削除
+          AWS_ACCESS_KEY_ID=$(echo "$AWS_ACCESS_KEY_ID" | xargs)
+          AWS_SECRET_ACCESS_KEY=$(echo "$AWS_SECRET_ACCESS_KEY" | xargs)
+          
           echo ""
           echo "Secrets check:"
-          if [ -z "$AWS_ACCESS_KEY_ID" ]; then
-            echo "❌ AWS_ACCESS_KEY_ID: NOT SET"
+          if [ -z "$AWS_ACCESS_KEY_ID" ] || [ "$AWS_ACCESS_KEY_ID" == "" ]; then
+            echo "❌ AWS_ACCESS_KEY_ID: NOT SET or EMPTY"
             echo "   → GitHub Environment 'develop' で 'AWS_ACCESS_KEY_ID' が設定されていません"
             echo "   → Settings > Environments > develop > Add secret で設定してください"
+            echo "   → 値が空文字列でないことを確認してください"
             exit 1
           else
             echo "✓ AWS_ACCESS_KEY_ID: SET (length: ${#AWS_ACCESS_KEY_ID} chars)"
             echo "  First 10 chars: ${AWS_ACCESS_KEY_ID:0:10}..."
+            # 一般的なAWSアクセスキーIDの形式チェック（AKIAで始まる）
+            if [[ ! "$AWS_ACCESS_KEY_ID" =~ ^AKIA[0-9A-Z]{16}$ ]]; then
+              echo "  ⚠️  Warning: AWS_ACCESS_KEY_ID format may be incorrect (should start with AKIA and be 20 chars)"
+            fi
           fi
           
-          if [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
-            echo "❌ AWS_SECRET_ACCESS_KEY: NOT SET"
+          if [ -z "$AWS_SECRET_ACCESS_KEY" ] || [ "$AWS_SECRET_ACCESS_KEY" == "" ]; then
+            echo "❌ AWS_SECRET_ACCESS_KEY: NOT SET or EMPTY"
             echo "   → GitHub Environment 'develop' で 'AWS_SECRET_ACCESS_KEY' が設定されていません"
             echo "   → Settings > Environments > develop > Add secret で設定してください"
+            echo "   → 値が空文字列でないことを確認してください"
             exit 1
           else
             echo "✓ AWS_SECRET_ACCESS_KEY: SET (length: ${#AWS_SECRET_ACCESS_KEY} chars)"
             echo "  First 10 chars: ${AWS_SECRET_ACCESS_KEY:0:10}..."
+            # 一般的なAWSシークレットキーの長さチェック（40文字）
+            if [ ${#AWS_SECRET_ACCESS_KEY} -lt 30 ] || [ ${#AWS_SECRET_ACCESS_KEY} -gt 50 ]; then
+              echo "  ⚠️  Warning: AWS_SECRET_ACCESS_KEY length may be incorrect (typically 40 chars)"
+            fi
           fi
           
           echo "✓ AWS_REGION: $AWS_REGION"
@@ -122,6 +136,11 @@ jobs:
           aws-region: ${{ secrets.AWS_REGION || env.AWS_REGION }}
         continue-on-error: true
         id: aws-config
+        env:
+          # デバッグ用: 実際に渡されている値を確認（マスクされる）
+          DEBUG_AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          DEBUG_AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          DEBUG_AWS_REGION: ${{ secrets.AWS_REGION || env.AWS_REGION }}
 
       - name: Verify AWS credentials
         if: steps.aws-config.outcome == 'success'
@@ -161,23 +180,40 @@ jobs:
           echo ""
           echo "The aws-actions/configure-aws-credentials action failed."
           echo ""
+          echo "Debug information:"
+          echo "  - AWS_ACCESS_KEY_ID length: ${#DEBUG_AWS_ACCESS_KEY_ID}"
+          echo "  - AWS_SECRET_ACCESS_KEY length: ${#DEBUG_AWS_SECRET_ACCESS_KEY}"
+          echo "  - AWS_REGION: $DEBUG_AWS_REGION"
+          echo ""
+          if [ -z "$DEBUG_AWS_ACCESS_KEY_ID" ]; then
+            echo "❌ AWS_ACCESS_KEY_ID is empty or not set"
+          fi
+          if [ -z "$DEBUG_AWS_SECRET_ACCESS_KEY" ]; then
+            echo "❌ AWS_SECRET_ACCESS_KEY is empty or not set"
+          fi
+          echo ""
           echo "Troubleshooting steps:"
           echo "1. Check if 'AWS_ACCESS_KEY_ID' is set in GitHub Environment 'develop':"
           echo "   → Settings > Environments > develop > Secrets"
+          echo "   → Make sure the value is not empty"
           echo ""
           echo "2. Check if 'AWS_SECRET_ACCESS_KEY' is set in GitHub Environment 'develop':"
           echo "   → Settings > Environments > develop > Secrets"
+          echo "   → Make sure the value is not empty"
           echo ""
-          echo "3. Verify the secrets are not empty:"
-          echo "   → The secrets should have values (not empty strings)"
+          echo "3. Verify the secrets don't have leading/trailing spaces:"
+          echo "   → Edit the secret and check for spaces"
+          echo "   → Copy the value again if needed"
           echo ""
           echo "4. Check if the environment name matches:"
           echo "   → Workflow uses: environment: develop"
-          echo "   → GitHub Environment should be named: 'develop'"
+          echo "   → GitHub Environment should be named exactly: 'develop'"
           echo ""
-          echo "5. If using Repository Secrets instead of Environment Secrets:"
-          echo "   → Remove 'environment: develop' from the workflow"
-          echo "   → Or move secrets from Repository Secrets to Environment Secrets"
+          echo "5. Try removing and re-adding the secrets:"
+          echo "   → Delete the secrets"
+          echo "   → Add them again with fresh values"
+          echo ""
+          echo "6. Check the action output above for more details"
           echo ""
           exit 1
 
