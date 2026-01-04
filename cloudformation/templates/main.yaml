@@ -113,7 +113,7 @@ Resources:
                 'AWS:SourceArn': !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution}'
 
   # Note: Cognito resources are created manually
-  # See COGNITO_MANUAL_SETUP_GUIDE.md for setup instructions
+  # See COGNITO_SETUP.md for setup instructions
 
 Outputs:
   CloudFrontDistributionId:

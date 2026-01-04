@@ -4,20 +4,8 @@
     "ParameterValue": "production"
   },
   {
-    "ParameterKey": "CognitoCallbackURL",
-    "ParameterValue": ""
-  },
-  {
-    "ParameterKey": "CognitoSignOutURL",
-    "ParameterValue": ""
-  },
-  {
-    "ParameterKey": "CognitoDomainPrefix",
-    "ParameterValue": "manumaru-prod"
-  },
-  {
     "ParameterKey": "AllowedOrigins",
-    "ParameterValue": ""
+    "ParameterValue": "https://your-cloudfront-domain.cloudfront.net"
   }
 ]
 
