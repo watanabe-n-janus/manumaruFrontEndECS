@@ -16,6 +16,7 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment: production  # Environment secretsを使用
     
     steps:
       - name: Checkout code
@@ -44,12 +45,33 @@ jobs:
           REACT_APP_DYNAMODB_TABLE_NAME: ${{ secrets.REACT_APP_DYNAMODB_TABLE_NAME_PROD }}
         run: npm run build
 
+      - name: Check AWS secrets
+        run: |
+          if [ -z "${{ secrets.AWS_ACCESS_KEY_ID }}" ]; then
+            echo "❌ Error: AWS_ACCESS_KEY_ID secret is not set in production environment"
+            exit 1
+          fi
+          if [ -z "${{ secrets.AWS_SECRET_ACCESS_KEY }}" ]; then
+            echo "❌ Error: AWS_SECRET_ACCESS_KEY secret is not set in production environment"
+            exit 1
+          fi
+          echo "✓ AWS secrets are configured (production environment)"
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
+          aws-region: ${{ secrets.AWS_REGION || env.AWS_REGION }}
+
+      - name: Verify AWS credentials
+        run: |
+          echo "Verifying AWS credentials..."
+          aws sts get-caller-identity || {
+            echo "❌ Error: Failed to authenticate with AWS"
+            exit 1
+          }
+          echo "✓ AWS credentials verified"
 
       - name: Deploy CloudFormation stack
         run: |

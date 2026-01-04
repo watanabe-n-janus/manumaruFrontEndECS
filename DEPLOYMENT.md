@@ -16,9 +16,24 @@
 
 ## 初回セットアップ
 
-### 1. GitHub Secretsの設定
+### 1. GitHub EnvironmentsとSecretsの設定
 
-GitHubリポジトリの「**Settings** > **Secrets and variables** > **Actions**」で以下のシークレットを設定：
+**重要**: developとproductionで異なるAWSアカウントを使用する場合は、**GitHub Environments**を使用してください。
+
+#### 1.1 Environmentの作成
+
+1. GitHubリポジトリの「**Settings** > **Environments**」を開く
+2. 「**New environment**」をクリック
+3. 環境名を入力（`develop`と`production`）
+4. 「**Configure environment**」をクリック
+
+詳細は `GITHUB_ENVIRONMENTS.md` を参照してください。
+
+#### 1.2 Environment Secretsの設定
+
+各Environmentで以下のシークレットを設定：
+
+**注意**: Repository Secretsではなく、**Environment Secrets**を使用してください。
 
 #### 共通シークレット（必須）
 
