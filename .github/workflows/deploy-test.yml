@@ -282,27 +282,58 @@ jobs:
           STACK_NAME="manumaruFrontECS-develop"
           PARAMETER_FILE="parameters/develop.json"
           
+          # スタックの状態を確認
           if aws cloudformation describe-stacks --stack-name "$STACK_NAME" > /dev/null 2>&1; then
-            echo "Stack exists, updating..."
-            aws cloudformation update-stack \
+            STACK_STATUS=$(aws cloudformation describe-stacks \
               --stack-name "$STACK_NAME" \
-              --template-body file://templates/main.yaml \
-              --parameters file://$PARAMETER_FILE \
-              --capabilities CAPABILITY_NAMED_IAM || {
-                # 更新が不要な場合（No updates are to be performed）は正常終了
-                if aws cloudformation describe-stack-events \
-                  --stack-name "$STACK_NAME" \
-                  --max-items 1 \
-                  --query 'StackEvents[0].ResourceStatus' \
-                  --output text | grep -q "UPDATE_COMPLETE\|CREATE_COMPLETE"; then
-                  echo "✓ Stack is up to date"
-                else
-                  exit 1
-                fi
-              }
+              --query 'Stacks[0].StackStatus' \
+              --output text)
             
-            echo "Waiting for stack update to complete..."
-            aws cloudformation wait stack-update-complete --stack-name "$STACK_NAME" || true
+            echo "Stack exists with status: $STACK_STATUS"
+            
+            # ROLLBACK_COMPLETE状態の場合は削除して再作成
+            if [ "$STACK_STATUS" == "ROLLBACK_COMPLETE" ] || [ "$STACK_STATUS" == "DELETE_FAILED" ]; then
+              echo "⚠️  Stack is in $STACK_STATUS state and cannot be updated"
+              echo "Deleting stack for recreation..."
+              
+              aws cloudformation delete-stack --stack-name "$STACK_NAME"
+              echo "Waiting for stack deletion to complete..."
+              aws cloudformation wait stack-delete-complete --stack-name "$STACK_NAME" || {
+                echo "⚠️  Stack deletion may have failed or is still in progress"
+                echo "Waiting additional time..."
+                sleep 30
+              }
+              
+              echo "Creating new stack..."
+              aws cloudformation create-stack \
+                --stack-name "$STACK_NAME" \
+                --template-body file://templates/main.yaml \
+                --parameters file://$PARAMETER_FILE \
+                --capabilities CAPABILITY_NAMED_IAM
+              
+              echo "Waiting for stack creation to complete..."
+              aws cloudformation wait stack-create-complete --stack-name "$STACK_NAME"
+            else
+              # 通常の更新処理
+              echo "Updating stack..."
+              UPDATE_OUTPUT=$(aws cloudformation update-stack \
+                --stack-name "$STACK_NAME" \
+                --template-body file://templates/main.yaml \
+                --parameters file://$PARAMETER_FILE \
+                --capabilities CAPABILITY_NAMED_IAM 2>&1)
+              UPDATE_EXIT_CODE=$?
+              
+              if [ $UPDATE_EXIT_CODE -eq 0 ]; then
+                echo "Waiting for stack update to complete..."
+                aws cloudformation wait stack-update-complete --stack-name "$STACK_NAME"
+              elif echo "$UPDATE_OUTPUT" | grep -q "No updates are to be performed"; then
+                echo "✓ Stack is up to date (no changes detected)"
+              else
+                echo "❌ Stack update failed:"
+                echo "$UPDATE_OUTPUT"
+                exit 1
+              fi
+            fi
           else
             echo "Stack does not exist, creating..."
             aws cloudformation create-stack \
