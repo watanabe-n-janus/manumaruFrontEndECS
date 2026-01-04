@@ -20,13 +20,24 @@
 
 GitHubリポジトリの「**Settings** > **Secrets and variables** > **Actions**」で以下のシークレットを設定：
 
-#### 共通シークレット
+#### 共通シークレット（必須）
+
+**重要**: 以下のシークレットは必須です。設定されていないとデプロイが失敗します。
 
 ```
-AWS_ACCESS_KEY_ID
-AWS_SECRET_ACCESS_KEY
-AWS_REGION=ap-northeast-1
+AWS_ACCESS_KEY_ID          # AWSアクセスキーID（必須）
+AWS_SECRET_ACCESS_KEY      # AWSシークレットアクセスキー（必須）
+AWS_REGION                 # AWSリージョン（オプション、デフォルト: ap-northeast-1）
 ```
+
+**設定方法**:
+1. GitHubリポジトリの「**Settings** > **Secrets and variables** > **Actions**」を開く
+2. 「**New repository secret**」をクリック
+3. シークレット名と値を入力して保存
+
+**注意**: 
+- `AWS_ACCESS_KEY_ID`と`AWS_SECRET_ACCESS_KEY`は、CloudFormation、S3、CloudFrontへのアクセス権限が必要です
+- IAMユーザーまたはIAMロールに適切な権限を付与してください
 
 #### develop環境用シークレット
 
