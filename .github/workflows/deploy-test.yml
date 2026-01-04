@@ -292,7 +292,7 @@ jobs:
             echo "Stack exists with status: $STACK_STATUS"
             
             # ROLLBACK_COMPLETE状態の場合は削除して再作成
-            if [ "$STACK_STATUS" == "ROLLBACK_COMPLETE" ] || [ "$STACK_STATUS" == "DELETE_FAILED" ]; then
+            if [ "$STACK_STATUS" == "ROLLBACK_COMPLETE" ] || [ "$STACK_STATUS" == "DELETE_FAILED" ] || [ "$STACK_STATUS" == "CREATE_FAILED" ]; then
               echo "⚠️  Stack is in $STACK_STATUS state and cannot be updated"
               echo "Deleting stack for recreation..."
               
@@ -312,7 +312,15 @@ jobs:
                 --capabilities CAPABILITY_NAMED_IAM
               
               echo "Waiting for stack creation to complete..."
-              aws cloudformation wait stack-create-complete --stack-name "$STACK_NAME"
+              aws cloudformation wait stack-create-complete --stack-name "$STACK_NAME" || {
+                echo "❌ Stack creation failed. Checking events..."
+                aws cloudformation describe-stack-events \
+                  --stack-name "$STACK_NAME" \
+                  --max-items 10 \
+                  --query 'StackEvents[?ResourceStatus==`CREATE_FAILED`].[LogicalResourceId,ResourceStatusReason]' \
+                  --output table
+                exit 1
+              }
             else
               # 通常の更新処理
               echo "Updating stack..."
