@@ -1,0 +1,198 @@
+name: Deploy to Develop Environment
+
+on:
+  push:
+    branches:
+      - test
+      - test-clean
+      - develop
+  workflow_dispatch:
+
+env:
+  AWS_REGION: ap-northeast-1
+  STACK_NAME: manumaruFrontECS-develop
+  ENVIRONMENT: develop
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Build React app
+        env:
+          REACT_APP_USER_POOL_ID: ${{ secrets.REACT_APP_USER_POOL_ID }}
+          REACT_APP_USER_POOL_CLIENT_ID: ${{ secrets.REACT_APP_USER_POOL_CLIENT_ID }}
+          REACT_APP_COGNITO_DOMAIN: ${{ secrets.REACT_APP_COGNITO_DOMAIN }}
+          REACT_APP_AWS_REGION: ${{ secrets.REACT_APP_AWS_REGION || 'ap-northeast-1' }}
+          REACT_APP_CALLBACK_URL: ${{ secrets.REACT_APP_CALLBACK_URL }}
+          REACT_APP_SIGNOUT_URL: ${{ secrets.REACT_APP_SIGNOUT_URL }}
+          REACT_APP_AWS_API_BASE_ENDPOINT: ${{ secrets.REACT_APP_AWS_API_BASE_ENDPOINT }}
+          REACT_APP_AWS_API_KEY: ${{ secrets.REACT_APP_AWS_API_KEY }}
+          REACT_APP_AWS_BUCKET_NAME: ${{ secrets.REACT_APP_AWS_BUCKET_NAME }}
+          REACT_APP_DYNAMODB_TABLE_NAME: ${{ secrets.REACT_APP_DYNAMODB_TABLE_NAME }}
+        run: |
+          echo "Building React app with environment variables..."
+          npm run build
+          
+          if [ ! -d "build" ]; then
+            echo "❌ Error: Build directory not found"
+            exit 1
+          fi
+          
+          echo "✓ Build completed successfully"
+          echo "Build size: $(du -sh build | cut -f1)"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy CloudFormation stack
+        run: |
+          cd cloudformation
+          
+          # CloudFormationテンプレートの検証
+          echo "Validating CloudFormation template..."
+          aws cloudformation validate-template \
+            --template-body file://templates/main.yaml \
+            > /dev/null
+          
+          if [ $? -ne 0 ]; then
+            echo "❌ Template validation failed"
+            exit 1
+          fi
+          echo "✓ Template validation successful"
+          
+          # スタックの存在確認とデプロイ
+          STACK_NAME="manumaruFrontECS-develop"
+          PARAMETER_FILE="parameters/develop.json"
+          
+          if aws cloudformation describe-stacks --stack-name "$STACK_NAME" > /dev/null 2>&1; then
+            echo "Stack exists, updating..."
+            aws cloudformation update-stack \
+              --stack-name "$STACK_NAME" \
+              --template-body file://templates/main.yaml \
+              --parameters file://$PARAMETER_FILE \
+              --capabilities CAPABILITY_NAMED_IAM || {
+                # 更新が不要な場合（No updates are to be performed）は正常終了
+                if aws cloudformation describe-stack-events \
+                  --stack-name "$STACK_NAME" \
+                  --max-items 1 \
+                  --query 'StackEvents[0].ResourceStatus' \
+                  --output text | grep -q "UPDATE_COMPLETE\|CREATE_COMPLETE"; then
+                  echo "✓ Stack is up to date"
+                else
+                  exit 1
+                fi
+              }
+            
+            echo "Waiting for stack update to complete..."
+            aws cloudformation wait stack-update-complete --stack-name "$STACK_NAME" || true
+          else
+            echo "Stack does not exist, creating..."
+            aws cloudformation create-stack \
+              --stack-name "$STACK_NAME" \
+              --template-body file://templates/main.yaml \
+              --parameters file://$PARAMETER_FILE \
+              --capabilities CAPABILITY_NAMED_IAM
+            
+            echo "Waiting for stack creation to complete..."
+            aws cloudformation wait stack-create-complete --stack-name "$STACK_NAME"
+          fi
+          
+          echo "✓ CloudFormation stack deployment completed"
+
+      - name: Get S3 bucket name from CloudFormation
+        id: get-s3-bucket
+        run: |
+          BUCKET_NAME=$(aws cloudformation describe-stacks \
+            --stack-name ${{ env.STACK_NAME }} \
+            --query 'Stacks[0].Outputs[?OutputKey==`S3BucketName`].OutputValue' \
+            --output text)
+          if [ -z "$BUCKET_NAME" ] || [ "$BUCKET_NAME" == "None" ]; then
+            echo "❌ Error: S3 bucket name not found in CloudFormation outputs"
+            exit 1
+          fi
+          echo "bucket=$BUCKET_NAME" >> $GITHUB_OUTPUT
+          echo "S3 Bucket: $BUCKET_NAME"
+
+      - name: Sync build files to S3
+        run: |
+          BUCKET_NAME="${{ steps.get-s3-bucket.outputs.bucket }}"
+          
+          echo "Syncing build files to S3 bucket: $BUCKET_NAME"
+          
+          # Static assets with long cache
+          aws s3 sync build/ s3://$BUCKET_NAME/ \
+            --delete \
+            --cache-control "public, max-age=31536000, immutable" \
+            --exclude "*.html" \
+            --exclude "service-worker.js" \
+            --exclude "manifest.json" \
+            --exclude "*.map"
+          
+          # HTML files and service worker should not be cached
+          aws s3 sync build/ s3://$BUCKET_NAME/ \
+            --delete \
+            --cache-control "public, max-age=0, must-revalidate" \
+            --include "*.html" \
+            --include "service-worker.js" \
+            --include "manifest.json"
+          
+          # Source maps (optional, for debugging)
+          if find build -name "*.map" | grep -q .; then
+            aws s3 sync build/ s3://$BUCKET_NAME/ \
+              --cache-control "public, max-age=0, no-cache" \
+              --include "*.map"
+          fi
+          
+          echo "✓ Files synced to S3 successfully"
+
+      - name: Invalidate CloudFront cache
+        run: |
+          DISTRIBUTION_ID=$(aws cloudformation describe-stacks \
+            --stack-name ${{ env.STACK_NAME }} \
+            --query 'Stacks[0].Outputs[?OutputKey==`CloudFrontDistributionId`].OutputValue' \
+            --output text)
+          
+          if [ -z "$DISTRIBUTION_ID" ] || [ "$DISTRIBUTION_ID" == "None" ]; then
+            echo "❌ Error: CloudFront Distribution ID not found in CloudFormation outputs"
+            exit 1
+          fi
+          
+          INVALIDATION_ID=$(aws cloudfront create-invalidation \
+            --distribution-id $DISTRIBUTION_ID \
+            --paths "/*" \
+            --query 'Invalidation.Id' \
+            --output text)
+          
+          echo "CloudFront invalidation created: $INVALIDATION_ID"
+          echo "Waiting for invalidation to complete..."
+          
+          aws cloudfront wait invalidation-completed \
+            --distribution-id $DISTRIBUTION_ID \
+            --id $INVALIDATION_ID
+
+      - name: Get CloudFront URL
+        run: |
+          CLOUDFRONT_URL=$(aws cloudformation describe-stacks \
+            --stack-name ${{ env.STACK_NAME }} \
+            --query 'Stacks[0].Outputs[?OutputKey==`CloudFrontURL`].OutputValue' \
+            --output text)
+          echo "🚀 Deployment completed!"
+          echo "CloudFront URL: $CLOUDFRONT_URL"
+

@@ -1,0 +1,11 @@
+[
+  {
+    "ParameterKey": "Environment",
+    "ParameterValue": "production"
+  },
+  {
+    "ParameterKey": "AllowedOrigins",
+    "ParameterValue": "https://your-cloudfront-domain.cloudfront.net"
+  }
+]
+
