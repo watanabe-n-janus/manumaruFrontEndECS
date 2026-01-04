@@ -128,6 +128,56 @@ jobs:
           echo "All AWS secrets are configured"
           echo "=========================================="
 
+      - name: Validate AWS credentials format
+        run: |
+          echo "=========================================="
+          echo "Validating AWS Credentials Format"
+          echo "=========================================="
+          
+          AWS_ACCESS_KEY_ID="${{ secrets.AWS_ACCESS_KEY_ID }}"
+          AWS_SECRET_ACCESS_KEY="${{ secrets.AWS_SECRET_ACCESS_KEY }}"
+          
+          # 前後の空白を削除
+          AWS_ACCESS_KEY_ID=$(echo "$AWS_ACCESS_KEY_ID" | xargs)
+          AWS_SECRET_ACCESS_KEY=$(echo "$AWS_SECRET_ACCESS_KEY" | xargs)
+          
+          echo "AWS_ACCESS_KEY_ID validation:"
+          echo "  Length: ${#AWS_ACCESS_KEY_ID} chars"
+          echo "  Expected: 20 chars (format: AKIA followed by 16 alphanumeric chars)"
+          echo "  First 4 chars: ${AWS_ACCESS_KEY_ID:0:4}"
+          
+          if [[ ! "$AWS_ACCESS_KEY_ID" =~ ^AKIA[0-9A-Z]{16}$ ]]; then
+            echo "  ❌ Format validation failed"
+            echo "  → AWS_ACCESS_KEY_ID should start with 'AKIA' and be exactly 20 characters"
+            echo "  → Current value may be incorrect or contain invalid characters"
+          else
+            echo "  ✓ Format validation passed"
+          fi
+          
+          echo ""
+          echo "AWS_SECRET_ACCESS_KEY validation:"
+          echo "  Length: ${#AWS_SECRET_ACCESS_KEY} chars"
+          echo "  Expected: 40 chars (base64-like string)"
+          
+          if [ ${#AWS_SECRET_ACCESS_KEY} -lt 35 ] || [ ${#AWS_SECRET_ACCESS_KEY} -gt 45 ]; then
+            echo "  ❌ Length validation failed"
+            echo "  → AWS_SECRET_ACCESS_KEY should be approximately 40 characters"
+            echo "  → Current length (${#AWS_SECRET_ACCESS_KEY}) is outside expected range"
+          else
+            echo "  ✓ Length validation passed"
+          fi
+          
+          # 空白や改行が含まれていないかチェック
+          if [[ "$AWS_ACCESS_KEY_ID" =~ [[:space:]] ]]; then
+            echo "  ⚠️  Warning: AWS_ACCESS_KEY_ID contains whitespace"
+          fi
+          if [[ "$AWS_SECRET_ACCESS_KEY" =~ [[:space:]] ]]; then
+            echo "  ⚠️  Warning: AWS_SECRET_ACCESS_KEY contains whitespace"
+          fi
+          
+          echo ""
+          echo "=========================================="
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -136,11 +186,6 @@ jobs:
           aws-region: ${{ secrets.AWS_REGION || env.AWS_REGION }}
         continue-on-error: true
         id: aws-config
-        env:
-          # デバッグ用: 実際に渡されている値を確認（マスクされる）
-          DEBUG_AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          DEBUG_AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          DEBUG_AWS_REGION: ${{ secrets.AWS_REGION || env.AWS_REGION }}
 
       - name: Verify AWS credentials
         if: steps.aws-config.outcome == 'success'
@@ -178,42 +223,42 @@ jobs:
           echo "❌ AWS Credentials Configuration Failed"
           echo "=========================================="
           echo ""
-          echo "The aws-actions/configure-aws-credentials action failed."
+          echo "Error: The request signature we calculated does not match the signature you provided."
           echo ""
-          echo "Debug information:"
-          echo "  - AWS_ACCESS_KEY_ID length: ${#DEBUG_AWS_ACCESS_KEY_ID}"
-          echo "  - AWS_SECRET_ACCESS_KEY length: ${#DEBUG_AWS_SECRET_ACCESS_KEY}"
-          echo "  - AWS_REGION: $DEBUG_AWS_REGION"
-          echo ""
-          if [ -z "$DEBUG_AWS_ACCESS_KEY_ID" ]; then
-            echo "❌ AWS_ACCESS_KEY_ID is empty or not set"
-          fi
-          if [ -z "$DEBUG_AWS_SECRET_ACCESS_KEY" ]; then
-            echo "❌ AWS_SECRET_ACCESS_KEY is empty or not set"
-          fi
+          echo "This error typically means:"
+          echo "1. AWS_SECRET_ACCESS_KEY is incorrect"
+          echo "2. AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY don't match"
+          echo "3. The credentials have been rotated or revoked"
+          echo "4. There are extra spaces or characters in the secret values"
           echo ""
           echo "Troubleshooting steps:"
-          echo "1. Check if 'AWS_ACCESS_KEY_ID' is set in GitHub Environment 'develop':"
+          echo ""
+          echo "1. Verify AWS credentials in AWS Console:"
+          echo "   → Go to AWS IAM Console"
+          echo "   → Users > [Your IAM User] > Security credentials"
+          echo "   → Check if the access key is active"
+          echo "   → If needed, create a new access key"
+          echo ""
+          echo "2. Re-enter the secrets in GitHub:"
           echo "   → Settings > Environments > develop > Secrets"
-          echo "   → Make sure the value is not empty"
+          echo "   → Delete AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY"
+          echo "   → Add them again, making sure to:"
+          echo "     - Copy the entire value (no spaces before/after)"
+          echo "     - Don't include any line breaks"
+          echo "     - Copy directly from AWS Console (don't type manually)"
           echo ""
-          echo "2. Check if 'AWS_SECRET_ACCESS_KEY' is set in GitHub Environment 'develop':"
-          echo "   → Settings > Environments > develop > Secrets"
-          echo "   → Make sure the value is not empty"
+          echo "3. Verify the format:"
+          echo "   → AWS_ACCESS_KEY_ID: Should be 20 chars, starting with 'AKIA'"
+          echo "   → AWS_SECRET_ACCESS_KEY: Should be 40 chars (base64-like)"
           echo ""
-          echo "3. Verify the secrets don't have leading/trailing spaces:"
-          echo "   → Edit the secret and check for spaces"
-          echo "   → Copy the value again if needed"
+          echo "4. Check if credentials are for the correct AWS account:"
+          echo "   → Make sure you're using credentials for the develop environment's AWS account"
           echo ""
-          echo "4. Check if the environment name matches:"
-          echo "   → Workflow uses: environment: develop"
-          echo "   → GitHub Environment should be named exactly: 'develop'"
-          echo ""
-          echo "5. Try removing and re-adding the secrets:"
-          echo "   → Delete the secrets"
-          echo "   → Add them again with fresh values"
-          echo ""
-          echo "6. Check the action output above for more details"
+          echo "5. Test credentials locally (if you have AWS CLI):"
+          echo "   → aws configure set aws_access_key_id YOUR_ACCESS_KEY"
+          echo "   → aws configure set aws_secret_access_key YOUR_SECRET_KEY"
+          echo "   → aws sts get-caller-identity"
+          echo "   → If this fails, the credentials are incorrect"
           echo ""
           exit 1
 
