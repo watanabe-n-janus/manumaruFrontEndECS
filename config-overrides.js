@@ -1,37 +1,20 @@
-const { override, overrideDevServer } = require('customize-cra');
+const { override, overrideDevServer, disableEsLint } = require('customize-cra');
 
 module.exports = override(
-  // webpack設定のカスタマイズ
+  // eslintを一時的に無効化（eslint-webpack-pluginの互換性問題のため）
+  disableEsLint(),
+  // eslint-webpack-pluginを完全に削除
+  (config) => {
+    config.plugins = config.plugins.filter(
+      (plugin) => plugin.constructor.name !== 'ESLintWebpackPlugin'
+    );
+    return config;
+  }
 );
 
 const devServerConfig = () => (config) => {
-  // webpack-dev-server 5では onAfterSetupMiddleware が setupMiddlewares に変更された
-  if (config.onBeforeSetupMiddleware || config.onAfterSetupMiddleware) {
-    config.setupMiddlewares = (middlewares, devServer) => {
-      if (config.onBeforeSetupMiddleware) {
-        config.onBeforeSetupMiddleware(devServer);
-      }
-
-      if (config.onAfterSetupMiddleware) {
-        config.onAfterSetupMiddleware(devServer);
-      }
-
-      return middlewares;
-    };
-
-    delete config.onBeforeSetupMiddleware;
-    delete config.onAfterSetupMiddleware;
-  }
-
-  // webpack-dev-server 5では https は server.type に変更された
-  if (config.https) {
-    config.server = {
-      type: 'https',
-      options: typeof config.https === 'object' ? config.https : {}
-    };
-    delete config.https;
-  }
-
+  // webpack-dev-server 4.xを使用しているため、特別な変換は不要
+  // 必要に応じてカスタマイズを追加可能
   return config;
 };
 

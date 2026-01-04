@@ -1,6 +1,4 @@
 import { useEffect } from 'react';
-import { fetchAuthSession } from 'aws-amplify/auth';
-import { sendAuthReady } from '../utils/postMessage';
 
 /**
  * EW-AIから受け取った認証トークンを処理するカスタムフック
@@ -37,7 +35,6 @@ export function useExternalAuth() {
           }
 
           // CognitoトークンをlocalStorageに保存
-          // Amplifyが使用するキーフォーマット
           const keyPrefix = `CognitoIdentityServiceProvider.${clientId}`;
           const lastAuthUserKey = `${keyPrefix}.LastAuthUser`;
           
@@ -63,27 +60,14 @@ export function useExternalAuth() {
           localStorage.setItem(`${keyPrefix}.${username}.idToken`, idToken);
           localStorage.setItem(`${keyPrefix}.${username}.accessToken`, accessToken);
           
-          // clockDrift を設定（Amplifyが必要とする）
+          // clockDrift を設定（Cognitoが必要とする）
           localStorage.setItem(`${keyPrefix}.${username}.clockDrift`, '0');
 
           console.log('✅ Cognitoセッションを確立しました');
           
-          // セッションを確認
-          try {
-            const session = await fetchAuthSession();
-            console.log('✅ セッション確認成功:', {
-              tokens: session.tokens ? 'あり' : 'なし',
-              credentials: session.credentials ? 'あり' : 'なし'
-            });
-            
-            // ページをリロードしてAmplifyにトークンを認識させる
-            console.log('🔄 ページをリロードします...');
-            window.location.reload();
-          } catch (sessionError) {
-            console.error('⚠️ セッション確認エラー:', sessionError);
-            // エラーでもリロードを試みる
-            window.location.reload();
-          }
+          // ページをリロードしてトークンを認識させる
+          console.log('🔄 ページをリロードします...');
+          window.location.reload();
           
         } catch (error) {
           console.error('❌ Cognitoセッションの確立に失敗しました:', error);

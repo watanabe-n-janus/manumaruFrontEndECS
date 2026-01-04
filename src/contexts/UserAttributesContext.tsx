@@ -7,7 +7,7 @@ import React, {
     useRef,
     useState,
 } from 'react';
-import { fetchUserAttributes, getCurrentUser } from 'aws-amplify/auth';
+import { getCurrentUser, getUserFromToken, getTokensFromStorage } from '../utils/cognitoAuth';
 
 type UserAttributes = Partial<Record<string, string>>;
 
@@ -62,21 +62,51 @@ export const UserAttributesProvider: React.FC<React.PropsWithChildren> = ({ chil
                 return;
             }
 
-            // ユーザー属性を取得
-            console.log('📥 UserAttributesContext: Calling fetchUserAttributes...');
+            // ユーザー属性を取得（トークンから）
+            console.log('📥 UserAttributesContext: Getting attributes from token...');
             try {
-                const fetchedAttributes = await fetchUserAttributes();
-                console.log('📋 UserAttributesContext: Fetched attributes:', fetchedAttributes);
-                if (!mountedRef.current) {
-                    return;
+                const tokens = getTokensFromStorage();
+                if (tokens) {
+                    const userFromToken = getUserFromToken(tokens.idToken);
+                    const fetchedAttributes = userFromToken.attributes || {};
+                    
+                    // デバッグ: トークンのペイロードを確認
+                    try {
+                        const payload = JSON.parse(atob(tokens.idToken.split('.')[1]));
+                        console.log('🔍 ID Token Payload:', {
+                            email: payload.email,
+                            'cognito:username': payload['cognito:username'],
+                            sub: payload.sub,
+                            allKeys: Object.keys(payload),
+                        });
+                    } catch (e) {
+                        console.error('❌ Token payload parse error:', e);
+                    }
+                    
+                    console.log('📋 UserAttributesContext: Fetched attributes:', fetchedAttributes);
+                    console.log('📋 UserAttributesContext: Email from attributes:', fetchedAttributes.email);
+                    console.log('📋 UserAttributesContext: Username:', user.username);
+                    
+                    if (!mountedRef.current) {
+                        return;
+                    }
+                    setAttributes(fetchedAttributes);
+                    
+                    // メールアドレスの取得を優先順位付きで行う
+                    const emailValue = fetchedAttributes.email || 
+                                     fetchedAttributes['cognito:email'] || 
+                                     user.username || 
+                                     '';
+                    setEmail(emailValue);
+                    console.log('✅ UserAttributesContext: Email set to:', emailValue);
+                    console.log('✅ UserAttributesContext: Final email value:', emailValue);
+                    setError(undefined);
+                } else {
+                    throw new Error('トークンが見つかりません');
                 }
-                setAttributes(fetchedAttributes);
-                const emailValue = fetchedAttributes.email ?? '';
-                setEmail(emailValue);
-                console.log('✅ UserAttributesContext: Email set to:', emailValue);
-                setError(undefined);
             } catch (attrErr) {
-                console.error('❌ UserAttributesContext: fetchUserAttributes failed:', attrErr);
+                console.error('❌ UserAttributesContext: 属性取得に失敗:', attrErr);
+                console.error('❌ Error details:', JSON.stringify(attrErr, null, 2));
                 // email属性がない場合でもusernameを使用
                 console.log('⚠️ Using username as fallback');
                 const fallbackEmail = user.username || '';

@@ -1,0 +1,124 @@
+name: Deploy to Production Environment
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - production
+  workflow_dispatch:
+
+env:
+  AWS_REGION: ap-northeast-1
+  STACK_NAME: manumaruFrontECS-production
+  ENVIRONMENT: production
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Build React app
+        env:
+          REACT_APP_USER_POOL_ID: ${{ secrets.REACT_APP_USER_POOL_ID_PROD }}
+          REACT_APP_USER_POOL_CLIENT_ID: ${{ secrets.REACT_APP_USER_POOL_CLIENT_ID_PROD }}
+          REACT_APP_COGNITO_DOMAIN: ${{ secrets.REACT_APP_COGNITO_DOMAIN_PROD }}
+          REACT_APP_AWS_REGION: ${{ secrets.REACT_APP_AWS_REGION }}
+          REACT_APP_CALLBACK_URL: ${{ secrets.REACT_APP_CALLBACK_URL_PROD }}
+          REACT_APP_SIGNOUT_URL: ${{ secrets.REACT_APP_SIGNOUT_URL_PROD }}
+          REACT_APP_AWS_API_BASE_ENDPOINT: ${{ secrets.REACT_APP_AWS_API_BASE_ENDPOINT_PROD }}
+          REACT_APP_AWS_API_KEY: ${{ secrets.REACT_APP_AWS_API_KEY_PROD }}
+          REACT_APP_AWS_BUCKET_NAME: ${{ secrets.REACT_APP_AWS_BUCKET_NAME_PROD }}
+          REACT_APP_DYNAMODB_TABLE_NAME: ${{ secrets.REACT_APP_DYNAMODB_TABLE_NAME_PROD }}
+        run: npm run build
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy CloudFormation stack
+        run: |
+          chmod +x cloudformation/scripts/deploy.sh
+          cd cloudformation
+          ./scripts/deploy.sh production
+
+      - name: Get S3 bucket name from CloudFormation
+        id: get-s3-bucket
+        run: |
+          BUCKET_NAME=$(aws cloudformation describe-stacks \
+            --stack-name ${{ env.STACK_NAME }} \
+            --query 'Stacks[0].Outputs[?OutputKey==`S3BucketName`].OutputValue' \
+            --output text)
+          if [ -z "$BUCKET_NAME" ] || [ "$BUCKET_NAME" == "None" ]; then
+            echo "❌ Error: S3 bucket name not found in CloudFormation outputs"
+            exit 1
+          fi
+          echo "bucket=$BUCKET_NAME" >> $GITHUB_OUTPUT
+          echo "S3 Bucket: $BUCKET_NAME"
+
+      - name: Sync build files to S3
+        run: |
+          aws s3 sync build/ s3://${{ steps.get-s3-bucket.outputs.bucket }}/ \
+            --delete \
+            --cache-control "public, max-age=31536000, immutable" \
+            --exclude "*.html" \
+            --exclude "service-worker.js" \
+            --exclude "manifest.json"
+          
+          # HTML files and service worker should not be cached
+          aws s3 sync build/ s3://${{ steps.get-s3-bucket.outputs.bucket }}/ \
+            --delete \
+            --cache-control "public, max-age=0, must-revalidate" \
+            --include "*.html" \
+            --include "service-worker.js" \
+            --include "manifest.json"
+
+      - name: Invalidate CloudFront cache
+        run: |
+          DISTRIBUTION_ID=$(aws cloudformation describe-stacks \
+            --stack-name ${{ env.STACK_NAME }} \
+            --query 'Stacks[0].Outputs[?OutputKey==`CloudFrontDistributionId`].OutputValue' \
+            --output text)
+          
+          if [ -z "$DISTRIBUTION_ID" ] || [ "$DISTRIBUTION_ID" == "None" ]; then
+            echo "❌ Error: CloudFront Distribution ID not found in CloudFormation outputs"
+            exit 1
+          fi
+          
+          INVALIDATION_ID=$(aws cloudfront create-invalidation \
+            --distribution-id $DISTRIBUTION_ID \
+            --paths "/*" \
+            --query 'Invalidation.Id' \
+            --output text)
+          
+          echo "CloudFront invalidation created: $INVALIDATION_ID"
+          echo "Waiting for invalidation to complete..."
+          
+          aws cloudfront wait invalidation-completed \
+            --distribution-id $DISTRIBUTION_ID \
+            --id $INVALIDATION_ID
+
+      - name: Get CloudFront URL
+        run: |
+          CLOUDFRONT_URL=$(aws cloudformation describe-stacks \
+            --stack-name ${{ env.STACK_NAME }} \
+            --query 'Stacks[0].Outputs[?OutputKey==`CloudFrontURL`].OutputValue' \
+            --output text)
+          echo "🚀 Deployment completed!"
+          echo "CloudFront URL: $CLOUDFRONT_URL"
+
