@@ -28,7 +28,8 @@
 
 #### アプリケーションタイプの選択
 
-- ✅ **従来のウェブアプリケーション (Traditional Web Application)** を選択
+- ✅ **Single Page Application (SPA)** を選択
+  - このタイプを選択すると、クライアントシークレットは自動的に無効になります
 - 「**Next**」をクリック
 
 #### アプリケーション名の設定
@@ -59,19 +60,15 @@
 2. 「**Create application**」をクリック
 3. 作成完了後、**Client ID** をコピー（後で使用します）
 
-### 1.3 App Clientの設定（Public Clientとして再作成）
+### 1.3 App Clientの設定確認
 
-**重要**: フロントエンドアプリケーションでは、**Public Client（クライアントシークレットなし）** を使用する必要があります。
+**重要**: フロントエンドアプリケーションでは、**Single Page Application (SPA)** タイプを使用する必要があります。
 
 1. 作成されたApp Clientを開く
-2. 「**アプリケーションクライアントの詳細**」セクションで、**「クライアントシークレットを生成」** が**チェックされていない**ことを確認
-3. チェックされている場合は、新しいApp Clientを作成：
-   - 「**アプリケーションクライアントを作成**」をクリック
-   - **アプリケーションタイプ**: **Single Page Application (SPA)** を選択
-   - **クライアントシークレットを生成**: **チェックを外す**
-   - アプリケーション名: `manuMaruDevelopPublic`
-   - 「**アプリケーションクライアントを作成**」をクリック
-   - 新しい**Client ID**をコピー
+2. 「**アプリケーションクライアントの詳細**」セクションで以下を確認：
+   - **アプリケーションタイプ**: **Single Page Application (SPA)** になっていること
+   - **クライアントシークレットを生成**: **自動的にチェックが外れている**こと（SPAタイプでは自動的に無効）
+3. **Client ID**をコピーして保存
 
 ---
 
@@ -79,7 +76,7 @@
 
 ### 2.1 App ClientのHosted UI設定
 
-1. App Client `manuMaruDevelopPublic` を開く
+1. 作成したApp Clientを開く
 2. 「**Hosted UI**」タブを開く
 
 #### Allowed callback URLs
@@ -227,11 +224,11 @@ CloudFormationでCloudFront Distributionをデプロイ後：
 
 ### エラー: "invalid_client_secret"
 
-**原因**: App Clientにクライアントシークレットが設定されている
+**原因**: App Clientが「従来のウェブアプリケーション」タイプで作成されている
 
 **解決方法**:
 1. 新しいApp Clientを「Single Page Application (SPA)」タイプで作成
-2. 「クライアントシークレットを生成」のチェックを外す
+2. SPAタイプでは、クライアントシークレットは自動的に無効になります
 3. 新しいClient IDを環境変数に設定
 
 ### エラー: "/login" にリダイレクトされる
@@ -248,7 +245,7 @@ CloudFormationでCloudFront Distributionをデプロイ後：
 
 - [ ] User Poolが作成されている
 - [ ] App Clientが「Single Page Application (SPA)」タイプで作成されている
-- [ ] 「クライアントシークレットを生成」がチェックされていない
+- [ ] SPAタイプでは、クライアントシークレットは自動的に無効になっている
 - [ ] Allowed callback URLsに `http://localhost:3000` が登録されている
 - [ ] Allowed sign-out URLsに `http://localhost:3000` が登録されている
 - [ ] Allowed OAuth flowsで「Authorization code grant」がチェックされている
