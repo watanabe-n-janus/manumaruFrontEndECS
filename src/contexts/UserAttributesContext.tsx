@@ -93,13 +93,27 @@ export const UserAttributesProvider: React.FC<React.PropsWithChildren> = ({ chil
                     setAttributes(fetchedAttributes);
                     
                     // メールアドレスの取得を優先順位付きで行う
-                    const emailValue = fetchedAttributes.email || 
-                                     fetchedAttributes['cognito:email'] || 
-                                     user.username || 
-                                     '';
-                    setEmail(emailValue);
-                    console.log('✅ UserAttributesContext: Email set to:', emailValue);
-                    console.log('✅ UserAttributesContext: Final email value:', emailValue);
+                    // トークンのペイロードから直接emailを取得
+                    try {
+                        const payload = JSON.parse(atob(tokens.idToken.split('.')[1]));
+                        const emailValue = payload.email || 
+                                         fetchedAttributes.email || 
+                                         fetchedAttributes['cognito:email'] || 
+                                         user.username || 
+                                         '';
+                        setEmail(emailValue);
+                        console.log('✅ UserAttributesContext: Email set to:', emailValue);
+                        console.log('✅ UserAttributesContext: Final email value:', emailValue);
+                        console.log('✅ UserAttributesContext: Email from payload:', payload.email);
+                    } catch (e) {
+                        console.error('❌ Failed to parse token for email:', e);
+                        const emailValue = fetchedAttributes.email || 
+                                         fetchedAttributes['cognito:email'] || 
+                                         user.username || 
+                                         '';
+                        setEmail(emailValue);
+                        console.log('✅ UserAttributesContext: Email (fallback) set to:', emailValue);
+                    }
                     setError(undefined);
                 } else {
                     throw new Error('トークンが見つかりません');
