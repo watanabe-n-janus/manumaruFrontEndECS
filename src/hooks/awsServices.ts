@@ -4,13 +4,36 @@ import { DynamoDBDocumentClient, PutCommand, GetCommand } from "@aws-sdk/lib-dyn
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { Upload } from "@aws-sdk/lib-storage";
 
+// AWS認証情報の取得と検証
+const getAwsCredentials = () => {
+  const accessKeyId = process.env.REACT_APP_AWS_ACCESS_KEY_ID;
+  const secretAccessKey = process.env.REACT_APP_AWS_SECRET_ACCESS_KEY;
+  
+  // デバッグログ（本番環境では削除推奨）
+  if (process.env.NODE_ENV === 'development') {
+    console.log('🔑 AWS認証情報の確認:');
+    console.log('  - Access Key ID:', accessKeyId ? `${accessKeyId.substring(0, 4)}...` : '未設定');
+    console.log('  - Secret Access Key:', secretAccessKey ? '設定済み' : '未設定');
+    console.log('  - Region:', process.env.REACT_APP_AWS_REGION || 'ap-northeast-1');
+  }
+  
+  // 認証情報が設定されていない場合のエラーハンドリング
+  if (!accessKeyId || !secretAccessKey) {
+    const errorMsg = 'AWS認証情報が設定されていません。.env.localファイルにREACT_APP_AWS_ACCESS_KEY_IDとREACT_APP_AWS_SECRET_ACCESS_KEYを設定してください。';
+    console.error('❌', errorMsg);
+    throw new Error(errorMsg);
+  }
+  
+  return {
+    accessKeyId,
+    secretAccessKey,
+  };
+};
+
 // S3クライアントの設定
 const s3Client = new S3Client({
   region: process.env.REACT_APP_AWS_REGION || "ap-northeast-1",
-  credentials: {
-    accessKeyId: process.env.REACT_APP_AWS_ACCESS_KEY_ID || "",
-    secretAccessKey: process.env.REACT_APP_AWS_SECRET_ACCESS_KEY || "",
-  },
+  credentials: getAwsCredentials(),
   // チェックサムを無効化
   requestChecksumCalculation: "WHEN_REQUIRED",
 });
@@ -18,10 +41,7 @@ const s3Client = new S3Client({
 // DynamoDBクライアントの設定
 const dynamoDbClient = new DynamoDBClient({
   region: "ap-northeast-1",
-  credentials: {
-    accessKeyId: process.env.REACT_APP_AWS_ACCESS_KEY_ID || "",
-    secretAccessKey: process.env.REACT_APP_AWS_SECRET_ACCESS_KEY || "",
-  },
+  credentials: getAwsCredentials(),
 });
 
 const dynamoDB = DynamoDBDocumentClient.from(dynamoDbClient);
