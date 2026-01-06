@@ -342,6 +342,24 @@ amplify pull --appId d3931ec1agymob
    amplify publish --envName dev
    ```
 
+## 📚 ドキュメント
+
+プロジェクトのドキュメントは [`docs/`](./docs/) フォルダに整理されています。
+
+### セットアップガイド
+- [Cognito設定](./docs/setup/cognito-setup.md) - AWS Cognitoの手動セットアップ
+- [CloudFront URLをCognitoに設定](./docs/setup/cloudfront-cognito-setup.md) - デプロイ後のCognito設定
+- [デプロイメントガイド](./docs/setup/deployment.md) - GitHub Actionsを使用したデプロイ
+- [CloudFormationデプロイメント](./docs/setup/cloudformation.md) - CloudFormationスタックのデプロイ
+- [GitHub Environment設定](./docs/setup/github-environment-setup.md) - GitHub Environment Secretsの設定
+- [環境変数の説明](./docs/setup/environment-variables.md) - 環境変数の扱い方
+
+### トラブルシューティング
+- [CloudFormationエラー](./docs/troubleshooting/cloudformation-errors.md) - CloudFormationデプロイ時のエラー対処
+- [リダイレクトURL問題](./docs/troubleshooting/redirect-url-fix.md) - ログイン後のリダイレクト問題
+
+詳細は [docs/README.md](./docs/README.md) を参照してください。
+
 ## 🎯 iframe埋め込み対応（EW-AI連携）
 
 マニュまるはEW-AI内のiframeで動作します。SSO認証とセキュリティ設定については以下を参照：
