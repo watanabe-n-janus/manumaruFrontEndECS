@@ -45,6 +45,7 @@ jobs:
           REACT_APP_DYNAMODB_TABLE_NAME: ${{ secrets.REACT_APP_DYNAMODB_TABLE_NAME_PROD }}
           REACT_APP_AWS_ACCESS_KEY_ID: ${{ secrets.REACT_APP_AWS_ACCESS_KEY_ID_PROD }}
           REACT_APP_AWS_SECRET_ACCESS_KEY: ${{ secrets.REACT_APP_AWS_SECRET_ACCESS_KEY_PROD }}
+          REACT_APP_COGNITO_HOSTED_UI_URL: ${{ secrets.REACT_APP_COGNITO_HOSTED_UI_URL_PROD }}
         run: npm run build
 
       - name: Check AWS secrets
