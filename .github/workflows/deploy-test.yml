@@ -335,16 +335,25 @@ jobs:
                 echo "⚠️  Parameter file not found: $PARAMETER_FILE"
               fi
               
+              # update-stackコマンドを実行（エラーも含めて出力を取得）
+              set +e  # エラーで即座に終了しないようにする
               UPDATE_OUTPUT=$(aws cloudformation update-stack \
                 --stack-name "$STACK_NAME" \
                 --template-body file://templates/main.yaml \
                 --parameters file://$PARAMETER_FILE \
                 --capabilities CAPABILITY_NAMED_IAM 2>&1)
               UPDATE_EXIT_CODE=$?
+              set -e  # エラーで即座に終了するように戻す
               
-              echo "Update stack command exit code: $UPDATE_EXIT_CODE"
-              echo "Update stack command output:"
+              echo ""
+              echo "=========================================="
+              echo "Update stack command result:"
+              echo "=========================================="
+              echo "Exit code: $UPDATE_EXIT_CODE"
+              echo "Output:"
               echo "$UPDATE_OUTPUT"
+              echo "=========================================="
+              echo ""
               
               if [ $UPDATE_EXIT_CODE -eq 0 ]; then
                 echo "✓ Stack update initiated successfully"
@@ -426,20 +435,52 @@ jobs:
                   
                   exit 1
                 fi
-              elif echo "$UPDATE_OUTPUT" | grep -q "No updates are to be performed"; then
+              elif echo "$UPDATE_OUTPUT" | grep -qi "No updates are to be performed"; then
                 echo "✓ Stack is up to date (no changes detected)"
+                echo "This means the current stack configuration matches the template."
               else
                 echo ""
-                echo "❌ Stack update command failed:"
+                echo "=========================================="
+                echo "❌ Stack update command failed"
+                echo "=========================================="
                 echo "Exit code: $UPDATE_EXIT_CODE"
-                echo "Output:"
+                echo ""
+                echo "Error output:"
                 echo "$UPDATE_OUTPUT"
                 echo ""
+                
+                # エラーメッセージの種類を確認
+                if echo "$UPDATE_OUTPUT" | grep -qi "ValidationError"; then
+                  echo "Error type: Validation Error"
+                  echo "This usually means there's an issue with the template or parameters."
+                elif echo "$UPDATE_OUTPUT" | grep -qi "AccessDenied"; then
+                  echo "Error type: Access Denied"
+                  echo "This usually means the IAM user/role doesn't have necessary permissions."
+                elif echo "$UPDATE_OUTPUT" | grep -qi "InvalidParameterValue"; then
+                  echo "Error type: Invalid Parameter Value"
+                  echo "This usually means one of the parameters has an invalid value."
+                elif echo "$UPDATE_OUTPUT" | grep -qi "Resource.*cannot be updated"; then
+                  echo "Error type: Resource Update Not Allowed"
+                  echo "This usually means the resource doesn't support the requested change."
+                fi
+                
+                echo ""
                 echo "Checking current stack status..."
-                aws cloudformation describe-stacks \
+                CURRENT_STATUS=$(aws cloudformation describe-stacks \
                   --stack-name "$STACK_NAME" \
-                  --query 'Stacks[0].{Status:StackStatus,StatusReason:StackStatusReason}' \
-                  --output table 2>&1 || echo "Failed to get stack status"
+                  --query 'Stacks[0].StackStatus' \
+                  --output text 2>&1) || CURRENT_STATUS="Unknown"
+                
+                echo "Current stack status: $CURRENT_STATUS"
+                
+                echo ""
+                echo "Checking stack events for more details..."
+                aws cloudformation describe-stack-events \
+                  --stack-name "$STACK_NAME" \
+                  --max-items 5 \
+                  --query 'StackEvents[].[Timestamp,LogicalResourceId,ResourceStatus,ResourceStatusReason]' \
+                  --output table 2>&1 || echo "Failed to get stack events"
+                
                 exit 1
               fi
             fi
