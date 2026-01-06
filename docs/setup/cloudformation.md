@@ -142,3 +142,4 @@ aws cloudformation delete-stack --stack-name manumaruFrontECS-develop
 - ローカル開発環境では`http://localhost:3000`が既にコールバックURLに含まれています
 - Production環境では、デプロイ後にCloudFront URLを手動で追加するか、パラメータファイルを更新してスタックを更新してください
 
+

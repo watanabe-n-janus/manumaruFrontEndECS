@@ -5,6 +5,6 @@
   },
   {
     "ParameterKey": "AllowedOrigins",
-    "ParameterValue": "http://localhost:3000,http://localhost:5173"
+    "ParameterValue": "http://localhost:3000,http://localhost:5173,https://d1j5u26nd0gpbk.cloudfront.net"
   }
 ]
