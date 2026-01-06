@@ -71,6 +71,15 @@ axiosInstance.interceptors.request.use(
     // Request line
     headerSize += new Blob([`POST ${config.url} HTTP/1.1`]).size + 2;
     
+    // 個別のヘッダーサイズを計算（エラーメッセージ用）
+    const headerSizes: Record<string, number> = {};
+    Object.keys(config.headers || {}).forEach((key) => {
+      const value = config.headers?.[key];
+      if (value && typeof value === 'string') {
+        headerSizes[key] = new Blob([String(value)]).size;
+      }
+    });
+    
     // HTTPヘッダーサイズが大きい場合は警告（10KB制限）
     const MAX_HEADER_SIZE = 10 * 1024; // 10KB
     if (headerSize > MAX_HEADER_SIZE) {
