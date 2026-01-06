@@ -22,14 +22,24 @@ export function getCognitoConfig() {
   const clientId = process.env.REACT_APP_USER_POOL_CLIENT_ID;
   const domain = process.env.REACT_APP_COGNITO_DOMAIN;
   const region = process.env.REACT_APP_AWS_REGION || 'ap-northeast-1';
-  const callbackUrl = process.env.REACT_APP_CALLBACK_URL || 'http://localhost:3000';
-  const signOutUrl = process.env.REACT_APP_SIGNOUT_URL || 'http://localhost:3000';
+  
+  // 実行時に現在のURLを取得（デプロイ環境に対応）
+  // 環境変数が設定されている場合はそれを使用、なければ現在のURLを使用
+  const getCurrentOrigin = () => {
+    if (typeof window !== 'undefined') {
+      return window.location.origin;
+    }
+    return 'http://localhost:3000';
+  };
+  
+  const callbackUrl = process.env.REACT_APP_CALLBACK_URL || getCurrentOrigin();
+  const signOutUrl = process.env.REACT_APP_SIGNOUT_URL || getCurrentOrigin();
 
   if (!userPoolId || !clientId || !domain) {
     throw new Error('Cognito設定が不完全です。環境変数を確認してください。');
   }
 
-  return {
+  const config = {
     userPoolId,
     clientId,
     domain: `${domain}.auth.${region}.amazoncognito.com`,
@@ -37,6 +47,19 @@ export function getCognitoConfig() {
     callbackUrl: callbackUrl.replace(/\/$/, ''),
     signOutUrl: signOutUrl.replace(/\/$/, ''),
   };
+  
+  // デバッグログ（本番環境では削除推奨）
+  if (process.env.NODE_ENV === 'development') {
+    console.log('🔧 Cognito Config:', {
+      callbackUrl: config.callbackUrl,
+      signOutUrl: config.signOutUrl,
+      envCallbackUrl: process.env.REACT_APP_CALLBACK_URL,
+      envSignOutUrl: process.env.REACT_APP_SIGNOUT_URL,
+      currentOrigin: getCurrentOrigin(),
+    });
+  }
+  
+  return config;
 }
 
 /**
