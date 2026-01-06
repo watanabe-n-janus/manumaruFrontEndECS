@@ -47,45 +47,25 @@ export const UserAttributesProvider: React.FC<React.PropsWithChildren> = ({ chil
         }
 
         setLoading(true);
-        console.log('🔄 UserAttributesContext: Loading user attributes...');
         try {
             // ユーザーが存在するか確認
             const user = await getCurrentUser();
-            console.log('👤 UserAttributesContext: Current user:', user);
             if (!mountedRef.current) {
                 return;
             }
             
             if (!user) {
-                console.log('❌ UserAttributesContext: No user found');
                 resetState();
                 return;
             }
 
             // ユーザー属性を取得（トークンから）
-            console.log('📥 UserAttributesContext: Getting attributes from token...');
             try {
                 const tokens = getTokensFromStorage();
                 if (tokens) {
                     const userFromToken = getUserFromToken(tokens.idToken);
                     const fetchedAttributes = userFromToken.attributes || {};
                     
-                    // デバッグ: トークンのペイロードを確認
-                    try {
-                        const payload = JSON.parse(atob(tokens.idToken.split('.')[1]));
-                        console.log('🔍 ID Token Payload:', {
-                            email: payload.email,
-                            'cognito:username': payload['cognito:username'],
-                            sub: payload.sub,
-                            allKeys: Object.keys(payload),
-                        });
-                    } catch (e) {
-                        console.error('❌ Token payload parse error:', e);
-                    }
-                    
-                    console.log('📋 UserAttributesContext: Fetched attributes:', fetchedAttributes);
-                    console.log('📋 UserAttributesContext: Email from attributes:', fetchedAttributes.email);
-                    console.log('📋 UserAttributesContext: Username:', user.username);
                     
                     if (!mountedRef.current) {
                         return;
@@ -102,9 +82,6 @@ export const UserAttributesProvider: React.FC<React.PropsWithChildren> = ({ chil
                                          user.username || 
                                          '';
                         setEmail(emailValue);
-                        console.log('✅ UserAttributesContext: Email set to:', emailValue);
-                        console.log('✅ UserAttributesContext: Final email value:', emailValue);
-                        console.log('✅ UserAttributesContext: Email from payload:', payload.email);
                     } catch (e) {
                         console.error('❌ Failed to parse token for email:', e);
                         const emailValue = fetchedAttributes.email || 
@@ -112,7 +89,6 @@ export const UserAttributesProvider: React.FC<React.PropsWithChildren> = ({ chil
                                          user.username || 
                                          '';
                         setEmail(emailValue);
-                        console.log('✅ UserAttributesContext: Email (fallback) set to:', emailValue);
                     }
                     setError(undefined);
                 } else {
@@ -120,12 +96,9 @@ export const UserAttributesProvider: React.FC<React.PropsWithChildren> = ({ chil
                 }
             } catch (attrErr) {
                 console.error('❌ UserAttributesContext: 属性取得に失敗:', attrErr);
-                console.error('❌ Error details:', JSON.stringify(attrErr, null, 2));
                 // email属性がない場合でもusernameを使用
-                console.log('⚠️ Using username as fallback');
                 const fallbackEmail = user.username || '';
                 setEmail(fallbackEmail);
-                console.log('✅ UserAttributesContext: Email (fallback) set to:', fallbackEmail);
             }
         } catch (err) {
             console.error('❌ UserAttributesContext: ユーザー属性の取得に失敗しました', err);

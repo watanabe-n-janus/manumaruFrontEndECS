@@ -92,14 +92,6 @@ export const useCreateManual = (
         const postDataSizeKB = (postDataSize / 1024).toFixed(2);
         const postDataSizeMB = (postDataSize / (1024 * 1024)).toFixed(2);
         
-        console.log('📊 Request size check:', {
-            size: postDataSize,
-            sizeKB: postDataSizeKB,
-            sizeMB: postDataSizeMB,
-            workContentLength: workContent?.length || 0,
-            customPromptLength: customPrompt?.length || 0,
-        });
-        
         // API Gatewayの制限（10MB）をチェック
         const MAX_PAYLOAD_SIZE = 10 * 1024 * 1024; // 10MB
         if (postDataSize > MAX_PAYLOAD_SIZE) {
@@ -108,12 +100,6 @@ export const useCreateManual = (
             showSnackbar(errorMessage, 'error');
             setLoading(false);
             return;
-        }
-        
-        // 6MBを超える場合は警告
-        const WARNING_SIZE = 6 * 1024 * 1024; // 6MB
-        if (postDataSize > WARNING_SIZE) {
-            console.warn('⚠️ Request size is large:', `${postDataSizeMB}MB`);
         }
         
         try {

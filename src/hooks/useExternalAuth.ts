@@ -15,15 +15,12 @@ export function useExternalAuth() {
       ];
 
       if (!allowedOrigins.includes(event.origin)) {
-        console.log('🚫 許可されていないオリジンからのメッセージを無視:', event.origin);
         return;
       }
 
       // EW-AI から AUTH_TOKEN を受け取った
       if (event.data?.type === 'AUTH_TOKEN') {
         const { idToken, accessToken } = event.data;
-        
-        console.log('🔑 EW-AIから認証トークンを受信しました');
 
         try {
           // Cognito User Pool IDとClient IDを取得
@@ -63,10 +60,7 @@ export function useExternalAuth() {
           // clockDrift を設定（Cognitoが必要とする）
           localStorage.setItem(`${keyPrefix}.${username}.clockDrift`, '0');
 
-          console.log('✅ Cognitoセッションを確立しました');
-          
           // ページをリロードしてトークンを認識させる
-          console.log('🔄 ページをリロードします...');
           window.location.reload();
           
         } catch (error) {
@@ -87,8 +81,6 @@ export function useExternalAuth() {
     // メッセージリスナーを登録
     window.addEventListener('message', handleMessage);
     
-    console.log('👂 EW-AIからのメッセージを待機中...');
-    
     // 親ウィンドウに認証準備完了を通知
     const notifyAuthReady = () => {
       if (window.parent && window.parent !== window) {
@@ -106,8 +98,6 @@ export function useExternalAuth() {
             origin
           );
         });
-        
-        console.log('📢 EW-AIに認証準備完了を通知しました');
       }
     };
 

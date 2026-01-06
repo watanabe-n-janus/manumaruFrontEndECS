@@ -8,14 +8,7 @@ import { Upload } from "@aws-sdk/lib-storage";
 const getAwsCredentials = () => {
   const accessKeyId = process.env.REACT_APP_AWS_ACCESS_KEY_ID;
   const secretAccessKey = process.env.REACT_APP_AWS_SECRET_ACCESS_KEY;
-  
-  // デバッグログ（本番環境では削除推奨）
-  if (process.env.NODE_ENV === 'development') {
-    console.log('🔑 AWS認証情報の確認:');
-    console.log('  - Access Key ID:', accessKeyId ? `${accessKeyId.substring(0, 4)}...` : '未設定');
-    console.log('  - Secret Access Key:', secretAccessKey ? '設定済み' : '未設定');
-    console.log('  - Region:', process.env.REACT_APP_AWS_REGION || 'ap-northeast-1');
-  }
+
   
   // 認証情報が設定されていない場合のエラーハンドリング
   if (!accessKeyId || !secretAccessKey) {
@@ -23,7 +16,7 @@ const getAwsCredentials = () => {
     console.error('❌', errorMsg);
     throw new Error(errorMsg);
   }
-  
+
   return {
     accessKeyId,
     secretAccessKey,
@@ -95,22 +88,21 @@ const saveFeedbackToDynamoDB = async (
 
   try {
     await dynamoDB.send(command);
-    console.log('Feedback saved successfully to Feedback table');
   } catch (error) {
     console.error('Error saving feedback to DynamoDB:', error);
     throw error;
   }
 };
 
-export { 
-  s3Client, 
-  getPresignedUrl, 
-  dynamoDB, 
-  saveFeedbackToDynamoDB, 
-  Upload, 
-  ListObjectsV2Command, 
-  PutObjectCommand, 
-  DeleteObjectCommand, 
-  GetObjectCommand, 
-  GetCommand 
+export {
+  s3Client,
+  getPresignedUrl,
+  dynamoDB,
+  saveFeedbackToDynamoDB,
+  Upload,
+  ListObjectsV2Command,
+  PutObjectCommand,
+  DeleteObjectCommand,
+  GetObjectCommand,
+  GetCommand
 };

@@ -31,11 +31,6 @@ function App() {
     const hasError = urlParams.get('error');
     const loginMode = urlParams.get('login');
 
-    console.log('🔍 URL確認:', window.location.href);
-    console.log('🔍 認証コード:', hasAuthCode ? '検出' : 'なし');
-    console.log('🔍 エラー:', hasError || 'なし');
-    console.log('🔍 ログインモード:', loginMode || 'なし');
-
     if (hasError) {
       const errorDescription = urlParams.get('error_description');
       const error = urlParams.get('error');
@@ -73,14 +68,12 @@ function App() {
 
     // ?login=email パラメータがある場合は、リダイレクトフラグを無視して即座にリダイレクト
     if (loginMode === 'email' && !hasAuthCode) {
-      console.log('📧 メール認証モード: 即座にリダイレクトします');
       sessionStorage.removeItem('cognito_redirecting');
       setIsRedirecting(true);
       sessionStorage.setItem('cognito_redirecting', 'true');
 
       try {
         signInWithRedirect(); // プロバイダー指定なし = Hosted UIで選択可能
-        console.log('✅ リダイレクト開始');
       } catch (error) {
         console.error('❌ リダイレクトエラー:', error);
         setIsRedirecting(false);
@@ -93,7 +86,6 @@ function App() {
     // リダイレクト中フラグをチェック（無限ループ防止）
     const redirectingFlag = sessionStorage.getItem('cognito_redirecting');
     if (redirectingFlag === 'true' && !hasAuthCode) {
-      console.log('⏳ リダイレクト処理中...待機します');
       const checkRedirect = setInterval(() => {
         const stillRedirecting = sessionStorage.getItem('cognito_redirecting');
         if (stillRedirecting !== 'true') {
@@ -112,17 +104,14 @@ function App() {
     }
 
     if (hasAuthCode) {
-      console.log('🎉 認証コードを検出！トークンに交換します...');
       sessionStorage.removeItem('cognito_redirecting');
       setLoading(true);
 
       exchangeCodeForTokens(hasAuthCode)
         .then(async () => {
-          console.log('✅ トークン交換成功');
           await new Promise(resolve => setTimeout(resolve, 500));
           try {
             const currentUser = await getCurrentUser();
-            console.log('✅ ユーザー認証成功:', currentUser.username);
             setUser(currentUser);
             setLoading(false);
             window.history.replaceState({}, document.title, window.location.pathname);
@@ -147,25 +136,20 @@ function App() {
 
   async function checkUser() {
     if (isRedirecting) {
-      console.log('⏸️ リダイレクト処理中のため、スキップします');
       return;
     }
 
     try {
-      console.log('👤 ユーザー情報を取得中...');
       const currentUser = await getCurrentUser();
-      console.log('✅ ユーザーが見つかりました:', currentUser.username);
       setUser(currentUser);
       setLoading(false);
       setIsRedirecting(false);
       sessionStorage.removeItem('cognito_redirecting');
     } catch (error) {
-      console.log('❌ ログインしていません');
       setUser(null);
 
       const redirectingFlag = sessionStorage.getItem('cognito_redirecting');
       if (redirectingFlag === 'true') {
-        console.log('⏸️ リダイレクト処理中のため、スキップします');
         return;
       }
 
@@ -177,10 +161,8 @@ function App() {
         sessionStorage.setItem('cognito_redirecting', 'true');
 
         if (loginMode === 'email') {
-          console.log('📧 メール認証モードでリダイレクト');
           signInWithRedirect();
         } else {
-          console.log('🔐 PA認証にリダイレクト');
           signInWithRedirect('PA認証');
         }
       } catch (redirectError) {

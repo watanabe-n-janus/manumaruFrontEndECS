@@ -140,8 +140,6 @@ const Demo: React.FC = () => {
         return;
       }
 
-      console.log('サンプルバケット:', bucketName);
-
       try {
         const [simpleUrl, standardUrl, detailedUrl, videoUrl, tutorialUrl] = await Promise.all([
           getPresignedUrl(bucketName, 'samples/manual_simple.pdf'),
@@ -150,14 +148,6 @@ const Demo: React.FC = () => {
           getPresignedUrl(bucketName, 'samples/sample_video.mp4'),
           getPresignedUrl(bucketName, 'samples/tutorial_video.mp4'),
         ]);
-
-        console.log('署名付きURL生成完了:', {
-          simple: simpleUrl ? '✓' : '✗',
-          standard: standardUrl ? '✓' : '✗',
-          detailed: detailedUrl ? '✓' : '✗',
-          video: videoUrl ? '✓' : '✗',
-          tutorial: tutorialUrl ? '✓' : '✗',
-        });
 
         setSampleUrls({
           simple: simpleUrl || '',
@@ -178,22 +168,14 @@ const Demo: React.FC = () => {
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // userEmailのデバッグログ
-  useEffect(() => {
-    console.log('👤 Demo component - userEmail:', userEmail);
-  }, [userEmail]);
-
   // コンポーネントマウント時にpostMessageで準備完了を通知
   useEffect(() => {
     sendPageReady();
     if (userEmail) {
-      console.log('✅ Sending user info:', userEmail);
       sendUserInfo({
         username: userEmail,
         userId: userEmail
       });
-    } else {
-      console.log('⚠️ userEmail is empty, not sending user info');
     }
   }, [userEmail]);
 

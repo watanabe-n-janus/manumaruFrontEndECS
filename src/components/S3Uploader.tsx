@@ -93,11 +93,6 @@ const S3Uploader: React.FC<S3UploaderProps> = ({ onUploadComplete }) => {
     setErrorMessage('');
 
     try {
-      console.log('🔑 Uploading with credentials check...');
-      console.log('Bucket:', process.env.REACT_APP_AWS_BUCKET_NAME);
-      console.log('Region:', process.env.REACT_APP_AWS_REGION);
-      console.log('Access Key exists:', !!process.env.REACT_APP_AWS_ACCESS_KEY_ID);
-      
       const upload = new Upload({
         client: s3Client,
         params: {

@@ -5,16 +5,7 @@ import { getCognitoConfig } from './utils/cognitoAuth';
 
 // Cognito設定を確認
 try {
-  const config = getCognitoConfig();
-  console.log('🔧 Cognito設定:', {
-    userPoolId: config.userPoolId,
-    clientId: config.clientId,
-    domain: config.domain,
-    callbackUrl: config.callbackUrl,
-    signOutUrl: config.signOutUrl,
-    region: config.region,
-  });
-  console.log('✅ Cognito設定が正しく読み込まれました');
+  getCognitoConfig();
 } catch (error) {
   console.error('❌ Cognito設定エラー:', error);
 }

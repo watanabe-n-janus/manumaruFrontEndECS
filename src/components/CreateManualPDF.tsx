@@ -441,7 +441,6 @@ const CreateManualPDF: React.FC<CreateManualPDFProps> = ({ video_name, markdownT
         ...feedbackData,
         userId: userEmail || 'anonymous'
       });
-      console.log('フィードバック送信成功');
       // この動画でフィードバック送信済みとしてマーク
       setFeedbackSubmittedForVideo(video_name);
       // フィードバック送信後、保留中のアクションを実行

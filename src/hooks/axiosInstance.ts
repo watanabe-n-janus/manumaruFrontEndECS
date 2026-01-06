@@ -7,13 +7,6 @@ const baseURL = process.env.REACT_APP_AWS_API_BASE_ENDPOINT ||
   (isDevelopment ? 'https://pq1c6g2zzi.execute-api.ap-northeast-1.amazonaws.com/Prod/' : '');
 const apiKey = process.env.REACT_APP_AWS_API_KEY;
 
-console.log('Axios Configuration:', {
-  environment: process.env.NODE_ENV,
-  isDevelopment,
-  baseURL,
-  apiKey: apiKey ? `${apiKey.substring(0, 10)}...` : 'undefined',
-});
-
 const axiosInstance = axios.create({
   baseURL,
   headers: {
@@ -78,28 +71,6 @@ axiosInstance.interceptors.request.use(
     // Request line
     headerSize += new Blob([`POST ${config.url} HTTP/1.1`]).size + 2;
     
-    // 個別のヘッダーサイズをチェック
-    const headerSizes: Record<string, number> = {};
-    Object.keys(config.headers || {}).forEach((key) => {
-      const value = config.headers?.[key];
-      if (value && typeof value === 'string') {
-        headerSizes[key] = new Blob([String(value)]).size;
-      }
-    });
-    
-    console.log('API Request:', {
-      url: config.url,
-      method: config.method,
-      fullURL: isDevelopment ? `http://localhost:3000${config.baseURL}${config.url}` : `${config.baseURL}${config.url}`,
-      requestSize: requestSize,
-      requestSizeKB: (requestSize / 1024).toFixed(2),
-      requestSizeMB: (requestSize / (1024 * 1024)).toFixed(2),
-      headerSize: headerSize,
-      headerSizeKB: (headerSize / 1024).toFixed(2),
-      headerSizes: headerSizes,
-      headerKeys: Object.keys(config.headers || {}),
-    });
-    
     // HTTPヘッダーサイズが大きい場合は警告（10KB制限）
     const MAX_HEADER_SIZE = 10 * 1024; // 10KB
     if (headerSize > MAX_HEADER_SIZE) {
@@ -109,20 +80,6 @@ axiosInstance.interceptors.request.use(
         maxSizeKB: (MAX_HEADER_SIZE / 1024).toFixed(2),
         headerSizes: headerSizes,
         headerKeys: Object.keys(config.headers || {}),
-      });
-    } else if (headerSize > MAX_HEADER_SIZE * 0.8) {
-      console.warn('⚠️ HTTP header is getting large:', {
-        size: headerSize,
-        sizeKB: (headerSize / 1024).toFixed(2),
-        headerSizes: headerSizes,
-      });
-    }
-    
-    // リクエストサイズが大きい場合は警告
-    if (requestSize > 6 * 1024 * 1024) { // 6MB
-      console.warn('⚠️ Large request detected:', {
-        sizeMB: (requestSize / (1024 * 1024)).toFixed(2),
-        url: config.url,
       });
     }
     

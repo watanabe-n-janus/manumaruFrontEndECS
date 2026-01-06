@@ -149,10 +149,7 @@ const S3List: React.FC<S3ListProps> = ({ onFileSelect, refresh }) => {
   }, []);
 
   const fetchFiles = useCallback(async () => {
-    console.log('🔍 fetchFiles called, userEmail:', storageUserKey);
-    
     if (!storageUserKey) {
-      console.log('❌ userEmail is empty, skipping fetch');
       setLoading(false);
       return;
     }
@@ -161,7 +158,6 @@ const S3List: React.FC<S3ListProps> = ({ onFileSelect, refresh }) => {
 
     // 短時間での連続リクエストを防ぐ（最小間隔: 2秒）
     if (currentTime - lastFetchTimeRef.current < 2000) {
-      console.log('⏱️ Too soon, skipping fetch');
       return;
     }
 
@@ -173,9 +169,7 @@ const S3List: React.FC<S3ListProps> = ({ onFileSelect, refresh }) => {
         Bucket: process.env.REACT_APP_AWS_BUCKET_NAME!,
         Prefix: `movie/${storageUserKey}/`,
       });
-      console.log('📦 Fetching S3 files with params:', command.input);
       const data = await s3Client.send(command);
-      console.log('✅ S3 response:', data.Contents?.length, 'files found');
       const fileInfos = data.Contents
         ?.filter(item => item.Key !== 'movie/') // 'movie/'キーを除外
         .map(item => ({
@@ -186,17 +180,10 @@ const S3List: React.FC<S3ListProps> = ({ onFileSelect, refresh }) => {
       const currentFileNames = fileInfos.map(file => file.name);
       const previousFileNames = previousFileNamesRef.current;
 
-      console.log('📋 Current files:', currentFileNames);
-      console.log('📋 Previous files:', Array.from(previousFileNames));
-      console.log('📋 File count - Current:', currentFileNames.length, 'Previous:', previousFileNames.size);
-
       // ファイル一覧を更新（新規ファイルがある場合、または初回読み込みの場合）
       if (previousFileNames.size === 0 || hasNewFiles(currentFileNames, previousFileNames) || currentFileNames.length !== previousFileNames.size) {
-        console.log('✅ Updating file list');
         setFiles(fileInfos);
         previousFileNamesRef.current = new Set(currentFileNames);
-      } else {
-        console.log('⏭️ Skipping update - no changes detected');
       }
     } catch (error) {
       console.error('❌ Error fetching files:', error);

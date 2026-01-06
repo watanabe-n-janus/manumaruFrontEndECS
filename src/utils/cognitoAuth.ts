@@ -48,16 +48,6 @@ export function getCognitoConfig() {
     signOutUrl: signOutUrl.replace(/\/$/, ''),
   };
   
-  // デバッグログ（本番環境では削除推奨）
-  if (process.env.NODE_ENV === 'development') {
-    console.log('🔧 Cognito Config:', {
-      callbackUrl: config.callbackUrl,
-      signOutUrl: config.signOutUrl,
-      envCallbackUrl: process.env.REACT_APP_CALLBACK_URL,
-      envSignOutUrl: process.env.REACT_APP_SIGNOUT_URL,
-      currentOrigin: getCurrentOrigin(),
-    });
-  }
   
   return config;
 }
@@ -109,12 +99,6 @@ export function getUserFromToken(idToken: string): CognitoUser {
   try {
     const payload = JSON.parse(atob(idToken.split('.')[1]));
     
-    // デバッグ: トークンのペイロードをログ出力
-    console.log('🔍 getUserFromToken - Token payload keys:', Object.keys(payload));
-    console.log('🔍 getUserFromToken - Email:', payload.email);
-    console.log('🔍 getUserFromToken - Cognito username:', payload['cognito:username']);
-    console.log('🔍 getUserFromToken - Sub:', payload.sub);
-    
     // すべての属性を取得（emailを含む）
     const attributes: Record<string, string> = {};
     Object.keys(payload).forEach((key) => {
@@ -142,28 +126,18 @@ export function getUserFromToken(idToken: string): CognitoUser {
  * 現在のユーザーを取得
  */
 export async function getCurrentUser(): Promise<CognitoUser> {
-  console.log('👤 ユーザー情報を取得中...');
   const tokens = getTokensFromStorage();
   if (!tokens) {
-    console.log('❌ トークンが見つかりません');
     throw new Error('ユーザーがログインしていません');
   }
 
-  console.log('🔑 トークンが見つかりました:', {
-    hasIdToken: !!tokens.idToken,
-    hasAccessToken: !!tokens.accessToken,
-    idTokenValid: isTokenValid(tokens.idToken),
-  });
-
   if (!isTokenValid(tokens.idToken)) {
     // トークンが無効な場合はクリア
-    console.log('⚠️ トークンが無効です。クリアします。');
     clearTokens();
     throw new Error('トークンの有効期限が切れています');
   }
 
   const user = getUserFromToken(tokens.idToken);
-  console.log('✅ ユーザー情報取得成功:', user.username);
   return user;
 }
 
@@ -192,21 +166,6 @@ export function getSignInRedirectUrl(provider?: string): string {
 
   // /oauth2/authorize エンドポイントを使用（/login ではなく）
   const url = `https://${config.domain}/oauth2/authorize?${params.join('&')}`;
-  console.log('🔧 生成されたリダイレクトURL:', url);
-  console.log('🔧 設定確認:', {
-    callbackUrl: config.callbackUrl,
-    clientId: config.clientId,
-    domain: config.domain,
-    fullDomain: `https://${config.domain}`,
-    endpoint: '/oauth2/authorize',
-  });
-  
-  // Domain URLが正しく動作するか確認（デバッグ用）
-  console.log('🔍 Domain URL確認:', {
-    baseUrl: `https://${config.domain}`,
-    authorizeUrl: `https://${config.domain}/oauth2/authorize`,
-    expectedFormat: 'https://{domain-prefix}.auth.{region}.amazoncognito.com',
-  });
   
   return url;
 }
@@ -216,7 +175,6 @@ export function getSignInRedirectUrl(provider?: string): string {
  */
 export function signInWithRedirect(provider?: string): void {
   const url = getSignInRedirectUrl(provider);
-  console.log('🔐 Cognito Hosted UIにリダイレクト:', url);
   window.location.href = url;
 }
 
@@ -239,7 +197,6 @@ export function getSignOutUrl(): string {
 export function signOut(): void {
   clearTokens();
   const url = getSignOutUrl();
-  console.log('🚪 Cognito Hosted UIにログアウトリダイレクト:', url);
   window.location.href = url;
 }
 
@@ -299,12 +256,6 @@ export async function exchangeCodeForTokens(code: string): Promise<CognitoSessio
     }
 
     const data = await response.json();
-    console.log('🔑 トークン交換レスポンス:', {
-      hasIdToken: !!data.id_token,
-      hasAccessToken: !!data.access_token,
-      hasRefreshToken: !!data.refresh_token,
-      tokenType: data.token_type,
-    });
 
     const tokens: CognitoSession = {
       idToken: data.id_token,
@@ -314,7 +265,6 @@ export async function exchangeCodeForTokens(code: string): Promise<CognitoSessio
 
     // トークンをlocalStorageに保存
     saveTokens(tokens);
-    console.log('💾 トークンをlocalStorageに保存しました');
 
     return tokens;
   } catch (error) {
@@ -334,14 +284,6 @@ function saveTokens(tokens: CognitoSession): void {
   const user = getUserFromToken(tokens.idToken);
   const username = user.username;
 
-  console.log('💾 トークンを保存中:', {
-    username,
-    keyPrefix,
-    hasIdToken: !!tokens.idToken,
-    hasAccessToken: !!tokens.accessToken,
-    hasRefreshToken: !!tokens.refreshToken,
-  });
-
   // トークンを保存
   localStorage.setItem(`${keyPrefix}.LastAuthUser`, username);
   localStorage.setItem(`${keyPrefix}.${username}.idToken`, tokens.idToken);
@@ -350,8 +292,6 @@ function saveTokens(tokens: CognitoSession): void {
     localStorage.setItem(`${keyPrefix}.${username}.refreshToken`, tokens.refreshToken);
   }
   localStorage.setItem(`${keyPrefix}.${username}.clockDrift`, '0');
-
-  console.log('✅ トークン保存完了');
 }
 
 /**
