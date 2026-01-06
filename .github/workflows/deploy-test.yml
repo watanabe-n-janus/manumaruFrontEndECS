@@ -333,7 +333,45 @@ jobs:
               
               if [ $UPDATE_EXIT_CODE -eq 0 ]; then
                 echo "Waiting for stack update to complete..."
-                aws cloudformation wait stack-update-complete --stack-name "$STACK_NAME"
+                if aws cloudformation wait stack-update-complete --stack-name "$STACK_NAME"; then
+                  echo "✓ Stack update completed successfully"
+                else
+                  echo "❌ Stack update failed or timed out. Checking stack status..."
+                  
+                  # スタックの状態を確認
+                  FINAL_STATUS=$(aws cloudformation describe-stacks \
+                    --stack-name "$STACK_NAME" \
+                    --query 'Stacks[0].StackStatus' \
+                    --output text)
+                  
+                  echo "Current stack status: $FINAL_STATUS"
+                  
+                  # 失敗したリソースを確認
+                  echo ""
+                  echo "Failed resources:"
+                  aws cloudformation describe-stack-events \
+                    --stack-name "$STACK_NAME" \
+                    --max-items 20 \
+                    --query 'StackEvents[?ResourceStatus==`UPDATE_FAILED` || ResourceStatus==`UPDATE_ROLLBACK_COMPLETE`].[Timestamp,LogicalResourceId,ResourceStatus,ResourceStatusReason]' \
+                    --output table
+                  
+                  # 最新のエラーイベントを表示
+                  echo ""
+                  echo "Recent error events:"
+                  aws cloudformation describe-stack-events \
+                    --stack-name "$STACK_NAME" \
+                    --max-items 10 \
+                    --query 'StackEvents[?contains(ResourceStatus, `FAILED`) || contains(ResourceStatus, `ROLLBACK`)].{Time:Timestamp,Resource:LogicalResourceId,Status:ResourceStatus,Reason:ResourceStatusReason}' \
+                    --output table
+                  
+                  if [ "$FINAL_STATUS" == "UPDATE_ROLLBACK_COMPLETE" ] || [ "$FINAL_STATUS" == "UPDATE_ROLLBACK_FAILED" ]; then
+                    echo ""
+                    echo "⚠️  Stack update was rolled back. The stack is in a stable state but the update failed."
+                    echo "Please check the error messages above and fix the issues before retrying."
+                  fi
+                  
+                  exit 1
+                fi
               elif echo "$UPDATE_OUTPUT" | grep -q "No updates are to be performed"; then
                 echo "✓ Stack is up to date (no changes detected)"
               else
