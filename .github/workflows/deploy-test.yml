@@ -324,6 +324,17 @@ jobs:
             else
               # 通常の更新処理
               echo "Updating stack..."
+              echo "Stack name: $STACK_NAME"
+              echo "Parameter file: $PARAMETER_FILE"
+              
+              # パラメータファイルの内容を確認
+              if [ -f "$PARAMETER_FILE" ]; then
+                echo "Parameters:"
+                cat "$PARAMETER_FILE"
+              else
+                echo "⚠️  Parameter file not found: $PARAMETER_FILE"
+              fi
+              
               UPDATE_OUTPUT=$(aws cloudformation update-stack \
                 --stack-name "$STACK_NAME" \
                 --template-body file://templates/main.yaml \
@@ -331,43 +342,86 @@ jobs:
                 --capabilities CAPABILITY_NAMED_IAM 2>&1)
               UPDATE_EXIT_CODE=$?
               
+              echo "Update stack command exit code: $UPDATE_EXIT_CODE"
+              echo "Update stack command output:"
+              echo "$UPDATE_OUTPUT"
+              
               if [ $UPDATE_EXIT_CODE -eq 0 ]; then
+                echo "✓ Stack update initiated successfully"
+                echo "Stack ID: $(echo "$UPDATE_OUTPUT" | grep -oP 'arn:aws:cloudformation:[^ ]+' || echo 'N/A')"
+                
                 echo "Waiting for stack update to complete..."
-                if aws cloudformation wait stack-update-complete --stack-name "$STACK_NAME"; then
+                echo "This may take several minutes..."
+                
+                # waitコマンドのタイムアウトを設定（30分）
+                if timeout 1800 aws cloudformation wait stack-update-complete --stack-name "$STACK_NAME" 2>&1; then
                   echo "✓ Stack update completed successfully"
                 else
-                  echo "❌ Stack update failed or timed out. Checking stack status..."
+                  WAIT_EXIT_CODE=$?
+                  echo ""
+                  echo "❌ Stack update wait failed or timed out (exit code: $WAIT_EXIT_CODE)"
+                  echo "Checking stack status..."
                   
                   # スタックの状態を確認
                   FINAL_STATUS=$(aws cloudformation describe-stacks \
                     --stack-name "$STACK_NAME" \
                     --query 'Stacks[0].StackStatus' \
-                    --output text)
+                    --output text 2>&1)
                   
+                  echo ""
+                  echo "=========================================="
                   echo "Current stack status: $FINAL_STATUS"
+                  echo "=========================================="
+                  
+                  # スタックの詳細情報を取得
+                  echo ""
+                  echo "Stack details:"
+                  aws cloudformation describe-stacks \
+                    --stack-name "$STACK_NAME" \
+                    --query 'Stacks[0].{Status:StackStatus,StatusReason:StackStatusReason,LastUpdated:LastUpdatedTime}' \
+                    --output table 2>&1 || echo "Failed to get stack details"
                   
                   # 失敗したリソースを確認
                   echo ""
+                  echo "=========================================="
                   echo "Failed resources:"
+                  echo "=========================================="
                   aws cloudformation describe-stack-events \
                     --stack-name "$STACK_NAME" \
                     --max-items 20 \
                     --query 'StackEvents[?ResourceStatus==`UPDATE_FAILED` || ResourceStatus==`UPDATE_ROLLBACK_COMPLETE`].[Timestamp,LogicalResourceId,ResourceStatus,ResourceStatusReason]' \
-                    --output table
+                    --output table 2>&1 || echo "No failed resources found or failed to get events"
                   
                   # 最新のエラーイベントを表示
                   echo ""
-                  echo "Recent error events:"
+                  echo "=========================================="
+                  echo "Recent error events (last 10):"
+                  echo "=========================================="
                   aws cloudformation describe-stack-events \
                     --stack-name "$STACK_NAME" \
                     --max-items 10 \
                     --query 'StackEvents[?contains(ResourceStatus, `FAILED`) || contains(ResourceStatus, `ROLLBACK`)].{Time:Timestamp,Resource:LogicalResourceId,Status:ResourceStatus,Reason:ResourceStatusReason}' \
-                    --output table
+                    --output table 2>&1 || echo "No error events found or failed to get events"
+                  
+                  # すべての最新イベントを表示（デバッグ用）
+                  echo ""
+                  echo "=========================================="
+                  echo "All recent stack events (last 10):"
+                  echo "=========================================="
+                  aws cloudformation describe-stack-events \
+                    --stack-name "$STACK_NAME" \
+                    --max-items 10 \
+                    --query 'StackEvents[].[Timestamp,LogicalResourceId,ResourceStatus,ResourceStatusReason]' \
+                    --output table 2>&1 || echo "Failed to get stack events"
                   
                   if [ "$FINAL_STATUS" == "UPDATE_ROLLBACK_COMPLETE" ] || [ "$FINAL_STATUS" == "UPDATE_ROLLBACK_FAILED" ]; then
                     echo ""
                     echo "⚠️  Stack update was rolled back. The stack is in a stable state but the update failed."
                     echo "Please check the error messages above and fix the issues before retrying."
+                  elif [ "$FINAL_STATUS" == "UPDATE_IN_PROGRESS" ]; then
+                    echo ""
+                    echo "⚠️  Stack update is still in progress. The wait command may have timed out."
+                    echo "Please check the AWS console for the current status."
                   fi
                   
                   exit 1
@@ -375,8 +429,17 @@ jobs:
               elif echo "$UPDATE_OUTPUT" | grep -q "No updates are to be performed"; then
                 echo "✓ Stack is up to date (no changes detected)"
               else
-                echo "❌ Stack update failed:"
+                echo ""
+                echo "❌ Stack update command failed:"
+                echo "Exit code: $UPDATE_EXIT_CODE"
+                echo "Output:"
                 echo "$UPDATE_OUTPUT"
+                echo ""
+                echo "Checking current stack status..."
+                aws cloudformation describe-stacks \
+                  --stack-name "$STACK_NAME" \
+                  --query 'Stacks[0].{Status:StackStatus,StatusReason:StackStatusReason}' \
+                  --output table 2>&1 || echo "Failed to get stack status"
                 exit 1
               fi
             fi
